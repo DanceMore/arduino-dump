@@ -1,188 +1,102 @@
 /*
- * Arduino IR Remote Decoder - Compatible with Flipper Zero ir rx format
- * Outputs same protocol format as Flipper Zero for drop-in replacement compatibility
- * Connect IR receiver OUTPUT pin to Arduino pin 2
+ * Simplified Arduino IR Receiver
+ * Focus on clean data capture using IRremote.h best practices
  * 
- * Wiring for IR Receiver Module:
- * - VCC -> 5V or 3.3V
- * - GND -> GND  
- * - OUTPUT -> Pin 2 (IR_RECEIVE_PIN)
+ * Wiring:
+ * IR Receiver Module -> Arduino
+ * VCC    -> 5V
+ * GND    -> GND
+ * OUTPUT -> Pin 2
  */
 
 #include <IRremote.h>
 
 // Pin configuration
-const int IR_RECEIVE_PIN = 2;    // Digital pin for IR receiver OUTPUT
-const int STATUS_LED_PIN = 13;   // Built-in LED for status indication
-
-// IR receiver object
-IRrecv irrecv(IR_RECEIVE_PIN);
-decode_results results;
-
-// Protocol name mapping to match Flipper Zero format
-String getProtocolName(decode_type_t protocol) {
-  switch (protocol) {
-    case NEC: return "NEC";
-    case SONY: return "SIRC";  // Flipper calls Sony "SIRC"
-    case RC5: return "RC5";
-    case RC6: return "RC6";
-//    case DISH: return "DISH";
-    case SHARP: return "SHARP";
-    case PANASONIC: return "Panasonic";
-    case JVC: return "JVC";
-//    case SANYO: return "SANYO";
-//    case MITSUBISHI: return "Mitsubishi";
-    case SAMSUNG: return "Samsung32";  // Match Flipper naming
-    case LG: return "LG";
-    case WHYNTER: return "WHYNTER";
-//    case AIWA_RC_T501: return "AIWA";
-    case DENON: return "DENON";
-    case LEGO_PF: return "LEGO";
-    case BOSEWAVE: return "BOSE";
-    case MAGIQUEST: return "MAGIQUEST";
-    default: return "UNKNOWN";
-  }
-}
-
-// Format address and command as hex strings to match Flipper output
-String formatHex(unsigned long value, int minDigits = 2) {
-  String hex = "0x";
-  String hexValue = String(value, HEX);
-  hexValue.toUpperCase();
-  
-  // Pad with zeros if needed
-  while (hexValue.length() < minDigits) {
-    hexValue = "0" + hexValue;
-  }
-  
-  hex += hexValue;
-  return hex;
-}
-
-// Extract address from different protocol formats
-unsigned long extractAddress(decode_results *results) {
-  switch (results->decode_type) {
-    case NEC:
-      // NEC sends address in first 8 bits
-      return (results->value >> 16) & 0xFF;
-    
-    case SONY:
-      // Sony SIRC has variable address length
-      return (results->value >> 7) & 0x1F;  // 5-bit address
-    
-    case SAMSUNG:
-      // Samsung sends 8-bit address
-      return (results->value >> 16) & 0xFF;
-    
-    case RC5:
-    case RC6:
-      // RC5/RC6 have 5-bit address
-      return (results->value >> 6) & 0x1F;
-    
-    default:
-      // For unknown protocols, try to extract from upper bits
-      return (results->value >> 8) & 0xFF;
-  }
-}
-
-// Extract command from different protocol formats  
-unsigned long extractCommand(decode_results *results) {
-  switch (results->decode_type) {
-    case NEC:
-      // NEC command is in lower 8 bits
-      return results->value & 0xFF;
-    
-    case SONY:
-      // Sony SIRC command is in lower 7 bits
-      return results->value & 0x7F;
-    
-    case SAMSUNG:
-      // Samsung command is in lower 8 bits
-      return results->value & 0xFF;
-    
-    case RC5:
-    case RC6:
-      // RC5/RC6 command is in lower 6 bits
-      return results->value & 0x3F;
-    
-    default:
-      // For unknown protocols, use lower 8 bits
-      return results->value & 0xFF;
-  }
-}
+const int IR_RECEIVE_PIN = 2;
+const int STATUS_LED_PIN = 13;
 
 void setup() {
-  Serial.begin(115200);  // Match Flipper Zero baud rate
+  Serial.begin(115200);
   pinMode(STATUS_LED_PIN, OUTPUT);
   
-  // Initialize IR receiver
-  irrecv.enableIRIn();
+  // Initialize IR receiver with proper settings
+  IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK);
   
-  // Send Flipper-compatible startup messages
+  // Flipper Zero compatible startup messages
   Serial.println("ir rx");
   Serial.println("Receiving...");
   Serial.println("Press Ctrl+C to stop");
   
-  // Flash LED to indicate ready (silent - no serial output)
-  for(int i = 0; i < 3; i++) {
-    digitalWrite(STATUS_LED_PIN, HIGH);
-    delay(200);
-    digitalWrite(STATUS_LED_PIN, LOW);
-    delay(200);
-  }
+  // Ready indicator (silent)
+  digitalWrite(STATUS_LED_PIN, HIGH);
+  delay(500);
+  digitalWrite(STATUS_LED_PIN, LOW);
+}
+
+// Convert protocol names to match Flipper Zero format
+String getFlipperProtocolName(String arduinoProtocol) {
+  if (arduinoProtocol == "Sony") return "SIRC";
+  if (arduinoProtocol == "Samsung32") return "Samsung32";
+  if (arduinoProtocol == "Samsung") return "Samsung32";
+  // Most others match directly
+  return arduinoProtocol;
 }
 
 void loop() {
-  if (irrecv.decode(&results)) {
-    // Flash LED on signal received
-    digitalWrite(STATUS_LED_PIN, HIGH);
+  // Check if we received IR data
+  if (IrReceiver.decode()) {
     
-    // Skip repeat codes (similar to Flipper behavior)
-    if (results.value != REPEAT) {
-      // Get protocol name
-      String protocol = getProtocolName(results.decode_type);
+    // Get basic info
+    String protocol = getFlipperProtocolName(IrReceiver.getProtocolString());
+    uint16_t address = IrReceiver.decodedIRData.address;
+    uint16_t command = IrReceiver.decodedIRData.command;
+    
+    // Only process non-repeat signals
+    if (!(IrReceiver.decodedIRData.flags & IRDATA_FLAGS_IS_REPEAT)) {
       
-      // Extract address and command based on protocol
-      unsigned long address = extractAddress(&results);
-      unsigned long command = extractCommand(&results);
+      // Flash LED briefly
+      digitalWrite(STATUS_LED_PIN, HIGH);
       
-      // Format in exact Flipper Zero format: "PROTOCOL, A:0xADDR, C:0xCMD"
-      String output = protocol + ", A:" + formatHex(address) + ", C:" + formatHex(command);
-      Serial.println(output);
+      // Output in exact Flipper Zero format: "PROTOCOL, A:0xADDR, C:0xCMD"
+      Serial.print(protocol);
+      Serial.print(", A:0x");
+      if (address < 0x10) Serial.print("0");  // Ensure 2-digit hex
+      Serial.print(address, HEX);
+      Serial.print(", C:0x");
+      if (command < 0x10) Serial.print("0");  // Ensure 2-digit hex
+      Serial.println(command, HEX);
       
-      // Optional: Also output raw hex for debugging (comment out for production)
-      // Serial.println("Raw: 0x" + String(results.value, HEX) + " (" + String(results.bits) + " bits)");
+      digitalWrite(STATUS_LED_PIN, LOW);
     }
     
-    // Resume receiving
-    irrecv.resume();
-    
-    digitalWrite(STATUS_LED_PIN, LOW);
+    // Enable receiving of the next IR signal
+    IrReceiver.resume();
   }
   
-  // Small delay to prevent overwhelming the serial port
   delay(50);
 }
 
 /*
  * USAGE NOTES:
  * 
- * 1. This Arduino will output the exact same format as Flipper Zero "ir rx" command
- * 2. Connect to your Python script using: python3 ir_mapper.py --device /dev/ttyACM0
- * 3. The Python script will work unchanged - just swap the device path
- * 4. All your remote mappings, Easter eggs, and channel dialing will work identically
+ * This Arduino now outputs EXACTLY the same format as Flipper Zero "ir rx":
  * 
- * WIRING:
- * IR Receiver Module -> Arduino
- * VCC    -> 5V (or 3.3V)
- * GND    -> GND
- * OUTPUT -> Pin 2
- * 
- * EXAMPLE OUTPUT:
- * NEC, A:0x32, C:0x11
+ * EXPECTED OUTPUT:
+ * ir rx
+ * Receiving...
+ * Press Ctrl+C to stop
+ * NEC, A:0x32, C:0x12
+ * NEC, A:0x32, C:0x10
+ * SIRC, A:0x01, C:0x75
  * Samsung32, A:0x07, C:0x12
- * SIRC, A:0x01, C:0x10
  * 
- * This matches exactly what your Flipper Zero outputs, so your existing
- * Python script will work without any modifications!
+ * INTEGRATION:
+ * 1. Connect to your Python script: python3 ir_mapper.py --device /dev/ttyACM0
+ * 2. Your existing Python script should work without ANY modifications
+ * 3. Just change the device path from Flipper to Arduino serial port
+ * 
+ * SERIAL PORTS:
+ * - Linux: /dev/ttyACM0 or /dev/ttyUSB0
+ * - Windows: COM3, COM4, etc.
+ * - Mac: /dev/cu.usbmodem* or /dev/cu.usbserial*
  */
