@@ -1,11 +1,19 @@
 /*
- * Arduino IR Receiver with Jumper-Controlled Debug Mode
- * Compatible with Flipper Zero ir rx format + optional debugging
+ * Arduino IR Receiver with Jumper-Controlled Debug Mode + TM1637 Display
+ * Compatible with Flipper Zero ir rx format + optional debugging + 7-segment display
  * 
  * Debug Control:
  * - Insert jumper between Pin 10 and GND for DEBUG_MODE=true
  * - Remove jumper for production/Flipper Zero compatibility
  * - No recompilation needed!
+ * 
+ * Display Control via Serial Commands:
+ * - DISP:text    -> Display text (up to 4 chars)
+ * - DISP:1234    -> Display number 1234
+ * - DISP:CLR     -> Clear display
+ * - DISP:BRT:7   -> Set brightness (0-7)
+ * - DISP:ON      -> Turn display on
+ * - DISP:OFF     -> Turn display off
  * 
  * Wiring:
  * IR Receiver Module -> Arduino
@@ -13,15 +21,23 @@
  * GND    -> GND
  * OUTPUT -> Pin 2
  * 
+ * TM1637 Display -> Arduino
+ * VCC -> 5V
+ * GND -> GND
+ * DIO -> Pin 4
+ * CLK -> Pin 5
+ * 
  * Debug Jumper:
  * Pin 10 -> GND (jumper wire or actual jumper)
- * 
- * LEDs:
- * - Your Arduino board has a built-in LED (usually on pin 13)
- * - Your IR receiver module has its own indicator LED
  */
 
 #include <IRremote.h>
+#include <TM1637Display.h>
+
+// TM1637 Display Configuration
+const int CLK = 5;
+const int DIO = 4;
+TM1637Display display(CLK, DIO);
 
 // Configuration (will be overridden by jumper detection)
 bool DEBUG_MODE = false;                 // Determined by jumper on pin 10
@@ -38,6 +54,10 @@ unsigned long totalSignals = 0;
 unsigned long validSignals = 0;
 unsigned long lastSignalTime = 0;
 
+// Display variables
+uint8_t displayBrightness = 4;           // Default brightness (0-7)
+bool displayEnabled = true;
+
 // Check if debug jumper is installed
 bool isDebugJumperInstalled() {
   pinMode(DEBUG_JUMPER_PIN, INPUT_PULLUP);
@@ -45,26 +65,141 @@ bool isDebugJumperInstalled() {
   return digitalRead(DEBUG_JUMPER_PIN) == LOW; // LOW = jumper to ground
 }
 
+// Process serial commands for display control
+void processSerialCommand() {
+  if (Serial.available()) {
+    String command = Serial.readStringUntil('\n');
+    command.trim();
+    command.toUpperCase();
+    
+    if (command.startsWith("DISP:")) {
+      String param = command.substring(5);
+      
+      if (param == "CLR") {
+        // Clear display
+        display.clear();
+        if (DEBUG_MODE) Serial.println("Display cleared");
+        
+      } else if (param == "ON") {
+        // Turn display on
+        displayEnabled = true;
+        display.setBrightness(displayBrightness);
+        if (DEBUG_MODE) Serial.println("Display turned ON");
+        
+      } else if (param == "OFF") {
+        // Turn display off
+        displayEnabled = false;
+        display.setBrightness(0);
+        if (DEBUG_MODE) Serial.println("Display turned OFF");
+        
+      } else if (param.startsWith("BRT:")) {
+        // Set brightness
+        int brightness = param.substring(4).toInt();
+        if (brightness >= 0 && brightness <= 7) {
+          displayBrightness = brightness;
+          if (displayEnabled) {
+            display.setBrightness(displayBrightness);
+          }
+          if (DEBUG_MODE) {
+            Serial.print("Display brightness set to: ");
+            Serial.println(brightness);
+          }
+        } else if (DEBUG_MODE) {
+          Serial.println("Invalid brightness (0-7)");
+        }
+        
+      } else {
+        // Display text or number
+        if (displayEnabled) {
+          // Check if it's a number
+          if (param.length() <= 4 && param.toInt() != 0 || param == "0") {
+            int number = param.toInt();
+            display.showNumberDec(number);
+          } else {
+            // Display as text (up to 4 characters)
+            if (param.length() > 4) {
+              param = param.substring(0, 4);
+            }
+            
+            // Convert string to display segments
+            uint8_t segments[4] = {0, 0, 0, 0};
+            for (int i = 0; i < param.length() && i < 4; i++) {
+              segments[i] = encodeChar(param.charAt(i));
+            }
+            display.setSegments(segments);
+          }
+          
+          if (DEBUG_MODE) {
+            Serial.print("Displayed: ");
+            Serial.println(param);
+          }
+        } else if (DEBUG_MODE) {
+          Serial.println("Display is OFF - use DISP:ON to enable");
+        }
+      }
+    } else if (DEBUG_MODE) {
+      Serial.println("Unknown command. Use DISP:text, DISP:CLR, DISP:ON, DISP:OFF, DISP:BRT:n");
+    }
+  }
+}
+
+// Encode characters for 7-segment display
+uint8_t encodeChar(char c) {
+  switch (c) {
+    case '0': return 0x3F;
+    case '1': return 0x06;
+    case '2': return 0x5B;
+    case '3': return 0x4F;
+    case '4': return 0x66;
+    case '5': return 0x6D;
+    case '6': return 0x7D;
+    case '7': return 0x07;
+    case '8': return 0x7F;
+    case '9': return 0x6F;
+    case 'A': return 0x77;
+    case 'B': return 0x7C;
+    case 'C': return 0x39;
+    case 'D': return 0x5E;
+    case 'E': return 0x79;
+    case 'F': return 0x71;
+    case 'G': return 0x3D;
+    case 'H': return 0x76;
+    case 'I': return 0x06;
+    case 'J': return 0x1E;
+    case 'L': return 0x38;
+    case 'N': return 0x54;
+    case 'O': return 0x3F;
+    case 'P': return 0x73;
+    case 'R': return 0x50;
+    case 'S': return 0x6D;
+    case 'T': return 0x78;
+    case 'U': return 0x3E;
+    case 'Y': return 0x6E;
+    case '-': return 0x40;
+    case '_': return 0x08;
+    case ' ': return 0x00;
+    default:  return 0x00; // Blank for unsupported characters
+  }
+}
+
 void setup() {
   Serial.begin(BAUD_RATE);
   delay(2000); // sleep so serial port can wake up...
+
+  // Initialize TM1637 Display
+  display.setBrightness(displayBrightness);
+  display.clear();
+  
+  // Show startup pattern
+  display.showNumberDec(8888); // All segments on briefly
+  delay(500);
+  display.clear();
 
   // DIAGNOSTIC: Check jumper status with detailed info
   pinMode(DEBUG_JUMPER_PIN, INPUT_PULLUP);
   delay(100); // Longer delay for stable reading
 
   bool jumperDetected = (digitalRead(DEBUG_JUMPER_PIN) == LOW);
-
-  // Print diagnostic info
-  //Serial.println("=== JUMPER DIAGNOSTIC ===");
-  //Serial.print("Pin 10 raw reading: ");
-  //Serial.println(digitalRead(DEBUG_JUMPER_PIN));
-  //Serial.print("Pin 10 voltage: ");
-  //Serial.println(digitalRead(DEBUG_JUMPER_PIN) == HIGH ? "HIGH (3.3V/5V)" : "LOW (0V/GND)");
-  //Serial.print("Jumper detected: ");
-  //Serial.println(jumperDetected ? "YES" : "NO");
-  //Serial.println("========================");
-
   DEBUG_MODE = jumperDetected;
   
   // Initialize IR receiver
@@ -72,24 +207,43 @@ void setup() {
   
   if (DEBUG_MODE) {
     // Debug mode startup
-    Serial.println("=== Arduino IR Receiver (DEBUG MODE - JUMPER DETECTED) ===");
+    Serial.println("=== Arduino IR Receiver + TM1637 Display (DEBUG MODE) ===");
     Serial.println("Configuration:");
     Serial.print("  - Debug Jumper: "); Serial.println("INSTALLED (Pin 10 -> GND)");
     Serial.print("  - Debug Mode: "); Serial.println("ON");
     Serial.print("  - Show Repeats: "); Serial.println(SHOW_REPEATS ? "ON" : "OFF");
     Serial.print("  - Show Raw Data: "); Serial.println(SHOW_RAW_DATA ? "ON" : "OFF");
     Serial.print("  - Baud Rate: "); Serial.println(BAUD_RATE);
+    Serial.print("  - Display: "); Serial.println("TM1637 4-Digit 7-Segment");
+    Serial.println();
+    Serial.println("Display Commands:");
+    Serial.println("  DISP:text    - Display text (up to 4 chars)");
+    Serial.println("  DISP:1234    - Display number");
+    Serial.println("  DISP:CLR     - Clear display");
+    Serial.println("  DISP:BRT:7   - Set brightness (0-7)");
+    Serial.println("  DISP:ON      - Turn display on");
+    Serial.println("  DISP:OFF     - Turn display off");
     Serial.println();
     Serial.println("Remove jumper and restart for production mode");
-    Serial.println("Waiting for IR signals...");
+    Serial.println("Waiting for IR signals and display commands...");
     Serial.println("Format: Protocol | Address | Command | Raw Value | Bits | Time");
     Serial.println("---");
+    
+    // Show "REDY" on display in debug mode
+    uint8_t readySegments[] = {0x50, 0x79, 0x5E, 0x6E}; // "REDY"
+    display.setSegments(readySegments);
+    
   } else {
     // Flipper Zero compatible startup
     Serial.println("ir rx");
     Serial.println("Receiving...");
     Serial.println("Press Ctrl+C to stop");
     Serial.println("(Insert Pin 10->GND jumper and restart for debug mode)");
+    Serial.println("Display commands: DISP:text, DISP:CLR, DISP:ON, DISP:OFF, DISP:BRT:n");
+    
+    // Show "----" on display in production mode
+    uint8_t dashSegments[] = {0x40, 0x40, 0x40, 0x40}; // "----"
+    display.setSegments(dashSegments);
   }
 }
 
@@ -187,6 +341,9 @@ void printFlipperOutput(String protocol, uint16_t address, uint16_t command) {
 }
 
 void loop() {
+  // Process any incoming serial commands for display
+  processSerialCommand();
+  
   // Check if we received IR data
   if (IrReceiver.decode()) {
     
@@ -221,56 +378,39 @@ void loop() {
 }
 
 /*
- * JUMPER CONFIGURATION GUIDE:
+ * DISPLAY COMMAND EXAMPLES:
  *
- * === Production Mode (No Jumper) ===
- * Pin 10: No connection (or leave floating)
- * Result: DEBUG_MODE = false
+ * Basic Usage:
+ * DISP:HELLO    -> Shows "HELL" (first 4 chars)
+ * DISP:1234     -> Shows "1234"
+ * DISP:42       -> Shows "42" (right-aligned)
+ * DISP:A1B2     -> Shows "A1B2"
+ * DISP:CLR      -> Clears display
  *
- * Output:
- * ir rx
- * Receiving...
- * Press Ctrl+C to stop
- * (Insert Pin 10->GND jumper and restart for debug mode)
- * NEC, A:0x32, C:0x12
- * SIRC, A:0x01, C:0x75
+ * Brightness Control:
+ * DISP:BRT:0    -> Dimmest
+ * DISP:BRT:7    -> Brightest
+ * DISP:BRT:4    -> Default
  *
- * === Debug Mode (Jumper Installed) ===
- * Pin 10: Connected to GND (use jumper wire or actual jumper)
- * Result: DEBUG_MODE = true
+ * Power Control:
+ * DISP:OFF      -> Turn display off
+ * DISP:ON       -> Turn display on
  *
- * Output:
- * === Arduino IR Receiver (DEBUG MODE - JUMPER DETECTED) ===
- * Configuration:
- *   - Debug Jumper: INSTALLED (Pin 10 -> GND)
- *   - Debug Mode: ON
- *   - Show Repeats: OFF
- *   - Show Raw Data: OFF
- *   - Baud Rate: 115200
+ * WIRING REFERENCE:
+ * TM1637 Display:
+ *   VCC -> Arduino 5V
+ *   GND -> Arduino GND
+ *   DIO -> Arduino Pin 4
+ *   CLK -> Arduino Pin 5
  *
- * Remove jumper and restart for production mode
- * Waiting for IR signals...
- * Format: Protocol | Address | Command | Raw Value | Bits | Time
- * ---
- * NEC | A:0x32 | C:0x12 | 32 bits | +150ms
- * SIRC | A:0x01 | C:0x75 | 12 bits | +250ms
+ * IR Receiver:
+ *   VCC -> Arduino 5V
+ *   GND -> Arduino GND
+ *   OUT -> Arduino Pin 2
  *
- * === Hardware Notes ===
- * - Use any jumper wire or actual jumper connector
- * - Most Arduino boards have a built-in LED (usually on pin 13)
- * - IR receiver modules typically have their own indicator LEDs
- * - External status LED on pin 12 is optional (set USE_STATUS_LED = true)
- * - Jumper detection uses internal pullup resistor
- * - Changes take effect immediately on restart (no recompilation!)
+ * Debug Jumper:
+ *   Pin 10 -> GND (for debug mode)
  *
- * === LED Indicators You'll See ===
- * - Arduino built-in LED: May blink during startup and operation
- * - IR receiver LED: Typically flashes when receiving IR signals
- * - Optional external LED: Only if USE_STATUS_LED = true
- *
- * === Field Usage ===
- * 1. Upload this code once to your Arduino
- * 2. For normal use: Remove any jumper, restart Arduino
- * 3. For debugging: Insert jumper (Pin 10 to GND), restart Arduino
- * 4. Switch modes anytime by adding/removing jumper and restarting
+ * LIBRARY REQUIRED:
+ * Install "TM1637" library by Avishay Orpaz from Library Manager
  */
