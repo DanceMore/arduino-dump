@@ -65,6 +65,34 @@ bool isDebugJumperInstalled() {
   return digitalRead(DEBUG_JUMPER_PIN) == LOW; // LOW = jumper to ground
 }
 
+// Check if a string contains only digits
+bool isNumericString(String str) {
+  if (str.length() == 0) return false;
+  for (int i = 0; i < str.length(); i++) {
+    if (!isdigit(str.charAt(i))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Display a numeric string exactly as specified (no automatic padding)
+void displayNumericString(String numStr) {
+  uint8_t segments[4] = {0, 0, 0, 0}; // All blank by default
+  
+  // Right-align the number (pad with blanks, not zeros)
+  int startPos = 4 - numStr.length();
+  if (startPos < 0) startPos = 0;
+  
+  // Leading positions remain blank (0x00)
+  // Fill only the actual digits from the string
+  for (int i = 0; i < numStr.length() && i < 4; i++) {
+    segments[startPos + i] = encodeChar(numStr.charAt(i));
+  }
+  
+  display.setSegments(segments);
+}
+
 // Process serial commands for display control
 void processSerialCommand() {
   if (Serial.available()) {
@@ -111,10 +139,10 @@ void processSerialCommand() {
       } else {
         // Display text or number
         if (displayEnabled) {
-          // Check if it's a number
-          if (param.length() <= 4 && param.toInt() != 0 || param == "0") {
-            int number = param.toInt();
-            display.showNumberDec(number);
+          // Check if it's a numeric string (including those with leading zeros)
+          if (isNumericString(param) && param.length() <= 4) {
+            // Handle as numeric string to preserve leading zeros
+            displayNumericString(param);
           } else {
             // Display as text (up to 4 characters)
             if (param.length() > 4) {
@@ -383,7 +411,10 @@ void loop() {
  * Basic Usage:
  * DISP:HELLO    -> Shows "HELL" (first 4 chars)
  * DISP:1234     -> Shows "1234"
- * DISP:42       -> Shows "42" (right-aligned)
+ * DISP:42       -> Shows " _42" (right-aligned with leading blanks)
+ * DISP:000      -> Shows "_000" (preserves leading zeros as specified)
+ * DISP:010      -> Shows "_010" (preserves leading zeros as specified)
+ * DISP:003      -> Shows "_003" (preserves leading zeros as specified)
  * DISP:A1B2     -> Shows "A1B2"
  * DISP:CLR      -> Clears display
  *
