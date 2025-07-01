@@ -148,7 +148,7 @@ void updateLEDAnimation() {
   switch (animationMode) {
     case 1: // Quick acknowledgment flash
       if (animationStep == 0) {
-        setColor(0, 255, 0); // Bright green
+        setColor(0, 64, 0); // Bright green
         ackFlashState = true;
       } else if (animationStep == 1) {
         setColor(0, 0, 0); // Off
@@ -801,9 +801,9 @@ void loop() {
 
     if (shouldProcess) {
       // Flash acknowledgment for valid received IR signals (brief, non-blocking)
-      if (!isRepeat) {
-        flashAck();
-      }
+      //if (!isRepeat) {
+      //  flashAck();
+      //}
 
       if (DEBUG_MODE) {
         // Detailed debug output
