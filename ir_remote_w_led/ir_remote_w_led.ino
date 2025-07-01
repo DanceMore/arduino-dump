@@ -166,7 +166,7 @@ void updateLEDAnimation() {
 
     case 3: // Quick acknowledgment flash
       if (animationStep == 0) {
-        setColor(0, 255, 0); // Bright green
+        setColor(0, 1, 0); // Bright green
         ackFlashState = true;
       } else if (animationStep == 1) {
         setColor(0, 0, 0); // Off
@@ -790,15 +790,23 @@ void loop() {
     uint8_t bits = IrReceiver.decodedIRData.numberOfBits;
     bool isRepeat = (IrReceiver.decodedIRData.flags & IRDATA_FLAGS_IS_REPEAT);
 
-    // Flash acknowledgment for received IR signals (brief, non-blocking)
-    if (!isRepeat) {
-      flashAck();
+    // Filter out noise: UNKNOWN protocols with zero address and command
+    bool isNoise = (protocol == "UNKNOWN" && address == 0 && command == 0);
+    
+    // Also filter out signals with 0 bits (usually noise)
+    if (bits == 0) {
+      isNoise = true;
     }
 
-    // Decide whether to process this signal
-    bool shouldProcess = !isRepeat || (DEBUG_MODE && SHOW_REPEATS);
+    // Only process valid signals (not noise, not repeats unless in debug mode)
+    bool shouldProcess = !isNoise && (!isRepeat || (DEBUG_MODE && SHOW_REPEATS));
 
     if (shouldProcess) {
+      // Flash acknowledgment for valid received IR signals (brief, non-blocking)
+      if (!isRepeat) {
+        flashAck();
+      }
+
       if (DEBUG_MODE) {
         // Detailed debug output
         printDebugInfo(protocol, address, command, rawValue, bits, isRepeat);
@@ -808,6 +816,9 @@ void loop() {
           printFlipperOutput(protocol, address, command);
         }
       }
+    } else if (DEBUG_MODE && isNoise && !isRepeat) {
+      // In debug mode, show filtered noise signals with a simple indicator
+      Serial.println("[NOISE FILTERED]");
     }
 
     // Enable receiving of the next IR signal
