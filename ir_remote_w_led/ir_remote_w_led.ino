@@ -86,7 +86,7 @@ uint8_t displayBrightness = 4;           // Default brightness (0-7)
 bool displayEnabled = true;
 
 // LED Animation variables
-int animationMode = 0;                   // 0=off, 1=red-blue, 2=traffic, 3=ack, 4=matrix, 5=rainbow, 6=pulse-red, 7=pulse-blue, 8=strobe, 9=fire, 10=ocean
+int animationMode = 0;                   // 0=off, 1=ack, 2=red-blue, 3=traffic, 4=matrix, 5=rainbow, 6=pulse-red, 7=pulse-blue, 8=strobe, 9=fire, 10=ocean
 unsigned long animationEndTime = 0;
 unsigned long lastAnimationUpdate = 0;
 int animationStep = 0;
@@ -146,7 +146,20 @@ void updateLEDAnimation() {
   lastAnimationUpdate = currentTime;
 
   switch (animationMode) {
-    case 1: // red-blue police style
+    case 1: // Quick acknowledgment flash
+      if (animationStep == 0) {
+        setColor(0, 255, 0); // Bright green
+        ackFlashState = true;
+      } else if (animationStep == 1) {
+        setColor(0, 0, 0); // Off
+        ackFlashState = false;
+        animationMode = 0; // End after one flash
+        animationEndTime = 0;
+      }
+      animationStep++;
+      break;
+
+    case 2: // red-blue police style
       if (animationStep % 2 == 0) {
         setColor(255, 0, 0); // Red
       } else {
@@ -155,24 +168,11 @@ void updateLEDAnimation() {
       animationStep++;
       break;
 
-    case 2: // red-green-yellow traffic light
+    case 3: // red-green-yellow traffic light
       switch (animationStep % 3) {
         case 0: setColor(255, 0, 0); break;   // Red
         case 1: setColor(0, 255, 0); break;   // Green
         case 2: setColor(255, 255, 0); break; // Yellow
-      }
-      animationStep++;
-      break;
-
-    case 3: // Quick acknowledgment flash
-      if (animationStep == 0) {
-        setColor(0, 1, 0); // Bright green
-        ackFlashState = true;
-      } else if (animationStep == 1) {
-        setColor(0, 0, 0); // Off
-        ackFlashState = false;
-        animationMode = 0; // End after one flash
-        animationEndTime = 0;
       }
       animationStep++;
       break;
@@ -263,19 +263,19 @@ void startLEDAnimation(int animType, int durationSeconds) {
   lastAnimationUpdate = 0;
 
   switch (animType) {
-    case 1: // Red-blue police style - fast
+    case 1: // Quick acknowledgment flash
+      animationInterval = 100;
+      animationEndTime = millis() + 300; // 300ms total
+      break;
+
+    case 2: // Red-blue police style - fast
       animationInterval = 150;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
 
-    case 2: // Traffic light - slow
+    case 3: // Traffic light - slow
       animationInterval = 800;
       animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case 3: // Quick acknowledgment flash
-      animationInterval = 100;
-      animationEndTime = millis() + 300; // 300ms total
       break;
 
     case 4: // Matrix effect
@@ -315,7 +315,7 @@ void startLEDAnimation(int animType, int durationSeconds) {
       break;
   }
 
-  if (DEBUG_MODE && animType != 3) { // Don't spam debug for ack flashes
+  if (DEBUG_MODE && animType != 1) { // Don't spam debug for ack flashes
     Serial.print("LED animation started: mode ");
     Serial.print(animType);
     if (durationSeconds > 0) {
@@ -330,7 +330,7 @@ void startLEDAnimation(int animType, int durationSeconds) {
 
 // Quick acknowledgment flash
 void flashAck() {
-  startLEDAnimation(3, 0); // Mode 3, no duration needed
+  startLEDAnimation(1, 0); // Mode 1, no duration needed
 }
 
 // Check if debug jumper is installed
@@ -387,7 +387,7 @@ void processSerialCommand() {
       } else if (param.startsWith("red-blue ")) {
         int duration = param.substring(9).toInt();
         if (duration > 0) {
-          startLEDAnimation(1, duration);
+          startLEDAnimation(2, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for red-blue animation");
         }
@@ -395,7 +395,7 @@ void processSerialCommand() {
       } else if (param.startsWith("red-green-yellow ")) {
         int duration = param.substring(17).toInt();
         if (duration > 0) {
-          startLEDAnimation(2, duration);
+          startLEDAnimation(3, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for red-green-yellow animation");
         }
