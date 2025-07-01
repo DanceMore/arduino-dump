@@ -99,7 +99,7 @@ void hsvToRgb(float h, float s, float v, uint8_t &r, uint8_t &g, uint8_t &b) {
   float c = v * s;
   float x = c * (1 - abs(fmod(h / 60.0, 2) - 1));
   float m = v - c;
-  
+
   float r1, g1, b1;
   if (h >= 0 && h < 60) {
     r1 = c; g1 = x; b1 = 0;
@@ -114,7 +114,7 @@ void hsvToRgb(float h, float s, float v, uint8_t &r, uint8_t &g, uint8_t &b) {
   } else {
     r1 = c; g1 = 0; b1 = x;
   }
-  
+
   r = (uint8_t)((r1 + m) * 255);
   g = (uint8_t)((g1 + m) * 255);
   b = (uint8_t)((b1 + m) * 255);
@@ -267,48 +267,48 @@ void startLEDAnimation(int animType, int durationSeconds) {
       animationInterval = 150;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
-      
+
     case 2: // Traffic light - slow
       animationInterval = 800;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
-      
+
     case 3: // Quick acknowledgment flash
       animationInterval = 100;
       animationEndTime = millis() + 300; // 300ms total
       break;
-      
+
     case 4: // Matrix effect
       animationInterval = 50;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
-      
+
     case 5: // Rainbow
       animationInterval = 30;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
-      
+
     case 6: // Pulse red
     case 7: // Pulse blue
       animationInterval = 30;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
-      
+
     case 8: // Strobe
       animationInterval = 100;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
-      
+
     case 9: // Fire
       animationInterval = 80;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
-      
+
     case 10: // Ocean
       animationInterval = 40;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
-      
+
     default: // Turn off
       animationEndTime = 0;
       setColor(0, 0, 0);
@@ -515,9 +515,7 @@ void processSerialCommand() {
       } else {
         // Display text or number
         if (displayEnabled) {
-          // Flash acknowledgment for display commands
-          flashAck();
-          
+
           // Check if it's a numeric string (including those with leading zeros)
           if (isNumericString(param) && param.length() <= 4) {
             // Handle as numeric string to preserve leading zeros
