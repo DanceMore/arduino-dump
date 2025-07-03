@@ -48,22 +48,25 @@ void LEDAnimations::begin(bool debugMode) {
   setColor(0, 0, 0);
 }
 
-// HSV to RGB conversion - optimized for flash memory
-void LEDAnimations::hsvToRgb(float h, float s, float v, uint8_t &r, uint8_t &g, uint8_t &b) {
-  int i = (int)(h / 60.0) % 6;
-  float f = h / 60.0 - i;
-  float p = v * (1 - s);
-  float q = v * (1 - f * s);
-  float t = v * (1 - (1 - f) * s);
+// Rainbow color lookup table - 60 entries covering full spectrum
+// This replaces the floating-point HSV calculation entirely
+const uint8_t rainbowTable[][3] PROGMEM = {
+  {255,0,0}, {255,17,0}, {255,34,0}, {255,51,0}, {255,68,0}, {255,85,0}, {255,102,0}, {255,119,0}, {255,136,0}, {255,153,0},
+  {255,170,0}, {255,187,0}, {255,204,0}, {255,221,0}, {255,238,0}, {255,255,0}, {238,255,0}, {221,255,0}, {204,255,0}, {187,255,0},
+  {170,255,0}, {153,255,0}, {136,255,0}, {119,255,0}, {102,255,0}, {85,255,0}, {68,255,0}, {51,255,0}, {34,255,0}, {17,255,0},
+  {0,255,0}, {0,255,17}, {0,255,34}, {0,255,51}, {0,255,68}, {0,255,85}, {0,255,102}, {0,255,119}, {0,255,136}, {0,255,153},
+  {0,255,170}, {0,255,187}, {0,255,204}, {0,255,221}, {0,255,238}, {0,255,255}, {0,238,255}, {0,221,255}, {0,204,255}, {0,187,255},
+  {0,170,255}, {0,153,255}, {0,136,255}, {0,119,255}, {0,102,255}, {0,85,255}, {0,68,255}, {0,51,255}, {0,34,255}, {0,17,255}
+};
 
-  switch (i) {
-    case 0: r = v * 255; g = t * 255; b = p * 255; break;
-    case 1: r = q * 255; g = v * 255; b = p * 255; break;
-    case 2: r = p * 255; g = v * 255; b = t * 255; break;
-    case 3: r = p * 255; g = q * 255; b = v * 255; break;
-    case 4: r = t * 255; g = p * 255; b = v * 255; break;
-    default: r = v * 255; g = p * 255; b = q * 255; break;
-  }
+const uint8_t RAINBOW_TABLE_SIZE = sizeof(rainbowTable) / sizeof(rainbowTable[0]);
+
+// Get rainbow color by index (0-59) - replaces HSV conversion
+void LEDAnimations::getRainbowColor(uint8_t index, uint8_t &r, uint8_t &g, uint8_t &b) {
+  index = index % RAINBOW_TABLE_SIZE;
+  r = pgm_read_byte(&rainbowTable[index][0]);
+  g = pgm_read_byte(&rainbowTable[index][1]);
+  b = pgm_read_byte(&rainbowTable[index][2]);
 }
 
 // Set RGB LED color (Common Anode - inverted logic)
@@ -171,11 +174,11 @@ void LEDAnimations::updateSinWave() {
 
 void LEDAnimations::updateRainbow() {
   uint8_t r, g, b;
-  float hue = fmod(animationPhase * 10, 360);
-  hsvToRgb(hue, 1.0, 1.0, r, g, b);
+  uint8_t colorIndex = animationStep % RAINBOW_TABLE_SIZE;
+  getRainbowColor(colorIndex, r, g, b);
   setColor(r, g, b);
-  animationPhase += 0.05;
-  if (animationPhase > 36.0) animationPhase = 0;
+  animationStep++;
+  if (animationStep >= RAINBOW_TABLE_SIZE) animationStep = 0;
 }
 
 void LEDAnimations::updateFire() {
