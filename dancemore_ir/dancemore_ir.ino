@@ -362,7 +362,7 @@ void setup() {
   pinMode(RED_PIN, OUTPUT);
   pinMode(GREEN_PIN, OUTPUT);
   pinMode(BLUE_PIN, OUTPUT);
-  setColor(0, 0, 0); // Start with LED off
+  //setColor(0, 0, 0); // Start with LED off
 
   // Initialize TM1637 Display
   display.setBrightness(displayBrightness);
@@ -379,6 +379,8 @@ void setup() {
 
   bool jumperDetected = (digitalRead(DEBUG_JUMPER_PIN) == LOW);
   DEBUG_MODE = jumperDetected;
+
+  ledAnimations.begin(DEBUG_MODE);
 
   // Initialize IR receiver
   IrReceiver.begin(IR_RECEIVE_PIN, ENABLE_LED_FEEDBACK);
@@ -441,7 +443,7 @@ void setup() {
 
   // Welcome flash
   delay(1000);
-  flashAck();
+  ledAnimations.flashAck();
 }
 
 // Convert protocol names to match Flipper Zero format
@@ -539,7 +541,7 @@ void printFlipperOutput(String protocol, uint16_t address, uint16_t command) {
 
 void loop() {
   // Update LED animations
-  updateLEDAnimation();
+  ledAnimations.update();
 
   // Process any incoming serial commands for display and LED
   processSerialCommand();
@@ -568,9 +570,9 @@ void loop() {
 
     if (shouldProcess) {
       // Flash acknowledgment for valid received IR signals (brief, non-blocking)
-      //if (!isRepeat) {
-      //  flashAck();
-      //}
+      if (!isRepeat) {
+        ledAnimations.flashAck();
+      }
 
       if (DEBUG_MODE) {
         // Detailed debug output
