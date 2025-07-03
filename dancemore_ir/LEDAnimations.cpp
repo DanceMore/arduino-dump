@@ -1,5 +1,5 @@
 /*
- * LEDAnimations.cpp
+ * LEDAnimations.cpp - Memory Optimized Version
  * LED Animation Library Implementation
  */
 
@@ -21,8 +21,8 @@ LEDAnimations::LEDAnimations(int redPin, int greenPin, int bluePin) {
   debugMode = false;
 }
 
-// Command table - add new commands here and they'll automatically work
-const LEDCommand LEDAnimations::commands[] = {
+// Command table - stored in PROGMEM to save RAM
+const LEDCommand LEDAnimations::commands[] PROGMEM = {
   {"off", ANIM_OFF, false},
   {"ack", ANIM_ACK, false},
   {"nack", ANIM_NACK, false},
@@ -50,30 +50,25 @@ void LEDAnimations::begin(bool debugMode) {
   setColor(0, 0, 0); // Start with LED off
 }
 
-// HSV to RGB conversion for rainbow effect
-void LEDAnimations::hsvToRgb(float h, float s, float v, uint8_t &r, uint8_t &g, uint8_t &b) {
-  float c = v * s;
-  float x = c * (1 - abs(fmod(h / 60.0, 2) - 1));
-  float m = v - c;
+// Rainbow color lookup table - 60 entries covering full spectrum
+// This replaces the floating-point HSV calculation entirely
+const uint8_t rainbowTable[][3] PROGMEM = {
+  {255,0,0}, {255,17,0}, {255,34,0}, {255,51,0}, {255,68,0}, {255,85,0}, {255,102,0}, {255,119,0}, {255,136,0}, {255,153,0},
+  {255,170,0}, {255,187,0}, {255,204,0}, {255,221,0}, {255,238,0}, {255,255,0}, {238,255,0}, {221,255,0}, {204,255,0}, {187,255,0},
+  {170,255,0}, {153,255,0}, {136,255,0}, {119,255,0}, {102,255,0}, {85,255,0}, {68,255,0}, {51,255,0}, {34,255,0}, {17,255,0},
+  {0,255,0}, {0,255,17}, {0,255,34}, {0,255,51}, {0,255,68}, {0,255,85}, {0,255,102}, {0,255,119}, {0,255,136}, {0,255,153},
+  {0,255,170}, {0,255,187}, {0,255,204}, {0,255,221}, {0,255,238}, {0,255,255}, {0,238,255}, {0,221,255}, {0,204,255}, {0,187,255},
+  {0,170,255}, {0,153,255}, {0,136,255}, {0,119,255}, {0,102,255}, {0,85,255}, {0,68,255}, {0,51,255}, {0,34,255}, {0,17,255}
+};
 
-  float r1, g1, b1;
-  if (h >= 0 && h < 60) {
-    r1 = c; g1 = x; b1 = 0;
-  } else if (h >= 60 && h < 120) {
-    r1 = x; g1 = c; b1 = 0;
-  } else if (h >= 120 && h < 180) {
-    r1 = 0; g1 = c; b1 = x;
-  } else if (h >= 180 && h < 240) {
-    r1 = 0; g1 = x; b1 = c;
-  } else if (h >= 240 && h < 300) {
-    r1 = x; g1 = 0; b1 = c;
-  } else {
-    r1 = c; g1 = 0; b1 = x;
-  }
+const uint8_t RAINBOW_TABLE_SIZE = sizeof(rainbowTable) / sizeof(rainbowTable[0]);
 
-  r = (uint8_t)((r1 + m) * 255);
-  g = (uint8_t)((g1 + m) * 255);
-  b = (uint8_t)((b1 + m) * 255);
+// Get rainbow color by index (0-59) - replaces HSV conversion
+void LEDAnimations::getRainbowColor(uint8_t index, uint8_t &r, uint8_t &g, uint8_t &b) {
+  index = index % RAINBOW_TABLE_SIZE;
+  r = pgm_read_byte(&rainbowTable[index][0]);
+  g = pgm_read_byte(&rainbowTable[index][1]);
+  b = pgm_read_byte(&rainbowTable[index][2]);
 }
 
 // Set RGB LED color (Common Anode - inverted logic)
@@ -156,14 +151,13 @@ void LEDAnimations::update() {
       }
       break;
 
-    case ANIM_RAINBOW: // Rainbow hue shift
+    case ANIM_RAINBOW: // Rainbow using lookup table
       {
         uint8_t r, g, b;
-        float hue = fmod(animationPhase * 10, 360); // Cycle through hues
-        hsvToRgb(hue, 1.0, 1.0, r, g, b);
+        uint8_t colorIndex = animationStep % RAINBOW_TABLE_SIZE;
+        getRainbowColor(colorIndex, r, g, b);
         setColor(r, g, b);
-        animationPhase += 0.05;
-        if (animationPhase > 36.0) animationPhase = 0; // Reset
+        animationStep++;
       }
       break;
 
@@ -243,97 +237,80 @@ void LEDAnimations::update() {
   }
 }
 
-// Start LED animation
+// Animation timing lookup table in PROGMEM
+struct AnimationTiming {
+  uint8_t animType;
+  uint16_t interval;
+  uint16_t briefDuration; // For ack/nack
+};
+
+const AnimationTiming timingTable[] PROGMEM = {
+  {ANIM_ACK, 100, 300},
+  {ANIM_NACK, 100, 300},
+  {ANIM_RED_BLUE, 150, 0},
+  {ANIM_TRAFFIC, 800, 0},
+  {ANIM_MATRIX, 50, 0},
+  {ANIM_RAINBOW, 30, 0},
+  {ANIM_PULSE_RED, 30, 0},
+  {ANIM_PULSE_BLUE, 30, 0},
+  {ANIM_STROBE, 100, 0},
+  {ANIM_FIRE, 80, 0},
+  {ANIM_OCEAN, 40, 0},
+  {ANIM_THINKING, 200, 0}
+};
+
+const int numTimings = sizeof(timingTable) / sizeof(timingTable[0]);
+
+// Start LED animation - optimized with lookup table
 void LEDAnimations::startAnimation(int animType, int durationSeconds) {
   animationMode = animType;
   animationStep = 0;
   animationPhase = 0.0;
   lastAnimationUpdate = 0;
 
-  switch (animType) {
-    case ANIM_ACK: // Quick acknowledgment flash
-      animationInterval = 100;
-      animationEndTime = millis() + 300; // 300ms total
+  // Find timing in table
+  for (int i = 0; i < numTimings; i++) {
+    if (pgm_read_byte(&timingTable[i].animType) == animType) {
+      animationInterval = pgm_read_word(&timingTable[i].interval);
+      uint16_t briefDuration = pgm_read_word(&timingTable[i].briefDuration);
+      
+      if (briefDuration > 0) {
+        animationEndTime = millis() + briefDuration;
+      } else if (durationSeconds > 0) {
+        animationEndTime = millis() + (durationSeconds * 1000UL);
+      } else {
+        animationEndTime = 0;
+      }
       break;
-
-    case ANIM_NACK: // Quick negative acknowledgment flash
-      animationInterval = 100;
-      animationEndTime = millis() + 300; // 300ms total
-      break;
-
-    case ANIM_RED_BLUE: // Red-blue police style - fast
-      animationInterval = 150;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case ANIM_TRAFFIC: // Traffic light - slow
-      animationInterval = 800;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case ANIM_MATRIX: // Matrix effect
-      animationInterval = 50;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case ANIM_RAINBOW: // Rainbow
-      animationInterval = 30;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case ANIM_PULSE_RED: // Pulse red
-    case ANIM_PULSE_BLUE: // Pulse blue
-      animationInterval = 30;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case ANIM_STROBE: // Strobe
-      animationInterval = 100;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case ANIM_FIRE: // Fire
-      animationInterval = 80;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case ANIM_OCEAN: // Ocean
-      animationInterval = 40;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case ANIM_THINKING: // Thinking - Simon sequence
-      animationInterval = 200; // 200ms per step = 600ms per color
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    default: // Turn off
-      animationEndTime = 0;
-      setColor(0, 0, 0);
-      break;
+    }
   }
 
-  if (debugMode && animType != ANIM_ACK && animType != ANIM_NACK) { // Don't spam debug for ack/nack flashes
-    Serial.print("LED animation started: mode ");
+  if (animType == ANIM_OFF) {
+    animationEndTime = 0;
+    setColor(0, 0, 0);
+  }
+
+  if (debugMode && animType != ANIM_ACK && animType != ANIM_NACK) {
+    Serial.print(F("LED animation started: mode "));
     Serial.print(animType);
     if (durationSeconds > 0) {
-      Serial.print(", duration ");
+      Serial.print(F(", duration "));
       Serial.print(durationSeconds);
-      Serial.println(" seconds");
+      Serial.println(F(" seconds"));
     } else {
-      Serial.println(" (brief)");
+      Serial.println(F(" (brief)"));
     }
   }
 }
 
 // Quick acknowledgment flash
 void LEDAnimations::flashAck() {
-  startAnimation(ANIM_ACK, 0); // Mode 1, no duration needed
+  startAnimation(ANIM_ACK, 0);
 }
 
 // Quick negative acknowledgment flash
 void LEDAnimations::flashNack() {
-  startAnimation(ANIM_NACK, 0); // Mode 2, no duration needed
+  startAnimation(ANIM_NACK, 0);
 }
 
 // Turn off LED
@@ -348,64 +325,66 @@ bool LEDAnimations::isAnimating() {
   return (animationMode != ANIM_OFF);
 }
 
-
-// Process LED command - replaces the giant if/else block
+// Process LED command - optimized for flash memory
 bool LEDAnimations::processCommand(const String& command) {
-  if (!command.startsWith("LED:")) {
-    return false; // Not an LED command
+  if (!command.startsWith(F("LED:"))) {
+    return false;
   }
 
   String param = command.substring(4);
 
   // Check each command in the table
   for (int i = 0; i < numCommands; i++) {
-    const LEDCommand& cmd = commands[i];
+    char cmdName[20];
+    strcpy_P(cmdName, (char*)pgm_read_ptr(&(commands[i].name)));
+    
+    bool requiresDuration = pgm_read_byte(&(commands[i].requiresDuration));
+    uint8_t animationType = pgm_read_byte(&(commands[i].animationType));
 
-    if (cmd.requiresDuration) {
-      // Command requires duration parameter
-      String cmdName = String(cmd.name) + " ";
-      if (param.startsWith(cmdName)) {
-        int duration = param.substring(cmdName.length()).toInt();
+    if (requiresDuration) {
+      String cmdNameStr = String(cmdName) + " ";
+      if (param.startsWith(cmdNameStr)) {
+        int duration = param.substring(cmdNameStr.length()).toInt();
         if (duration > 0) {
-          startAnimation(cmd.animationType, duration);
+          startAnimation(animationType, duration);
           return true;
         } else if (debugMode) {
-          Serial.print("Invalid duration for ");
-          Serial.print(cmd.name);
-          Serial.println(" animation");
+          Serial.print(F("Invalid duration for "));
+          Serial.print(cmdName);
+          Serial.println(F(" animation"));
         }
-        return true; // Command was recognized even if invalid
+        return true;
       }
     } else {
-      // Simple command without duration
-      if (param == cmd.name) {
-        if (cmd.animationType == ANIM_OFF) {
+      if (param == cmdName) {
+        if (animationType == ANIM_OFF) {
           off();
         } else {
-          startAnimation(cmd.animationType, 0);
+          startAnimation(animationType, 0);
         }
         return true;
       }
     }
   }
 
-  // Command not found - show help if in debug mode
   if (debugMode) {
     printHelp();
   }
-
-  return true; // We handled the LED: prefix even if command was invalid
+  return true;
 }
 
-// Print help - automatically generated from command table
+// Print help - optimized for flash memory
 void LEDAnimations::printHelp() {
-  Serial.println("LED commands:");
+  Serial.println(F("LED commands:"));
   for (int i = 0; i < numCommands; i++) {
-    const LEDCommand& cmd = commands[i];
-    Serial.print("  LED:");
-    Serial.print(cmd.name);
-    if (cmd.requiresDuration) {
-      Serial.println(" <duration>");
+    char cmdName[20];
+    strcpy_P(cmdName, (char*)pgm_read_ptr(&(commands[i].name)));
+    bool requiresDuration = pgm_read_byte(&(commands[i].requiresDuration));
+    
+    Serial.print(F("  LED:"));
+    Serial.print(cmdName);
+    if (requiresDuration) {
+      Serial.println(F(" <duration>"));
     } else {
       Serial.println();
     }
