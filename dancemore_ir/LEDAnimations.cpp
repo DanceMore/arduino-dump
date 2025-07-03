@@ -5,21 +5,11 @@
 
 #include "LEDAnimations.h"
 
-LEDAnimations::LEDAnimations(int redPin, int greenPin, int bluePin) {
-  this->redPin = redPin;
-  this->greenPin = greenPin;
-  this->bluePin = bluePin;
-  
-  // Initialize state
-  animationMode = ANIM_OFF;
-  animationEndTime = 0;
-  lastAnimationUpdate = 0;
-  animationStep = 0;
-  animationInterval = 500;
-  animationPhase = 0.0;
-  ackFlashState = false;
-  debugMode = false;
-}
+// Define the size of the sine lookup table
+#define SINE_LOOKUP_SIZE 64
+
+// Define the static member variables declared in the header
+// These must match the declarations in LEDAnimations.h
 
 // Command table - stored in PROGMEM to save RAM
 const LEDCommand LEDAnimations::commands[] PROGMEM = {
@@ -40,6 +30,68 @@ const LEDCommand LEDAnimations::commands[] PROGMEM = {
 
 const int LEDAnimations::numCommands = sizeof(LEDAnimations::commands) / sizeof(LEDAnimations::commands[0]);
 
+// Rainbow color lookup table - 60 entries covering full spectrum
+// This replaces the floating-point HSV calculation entirely
+const uint8_t LEDAnimations::rainbowTable[][3] PROGMEM = {
+  {255,0,0}, {255,17,0}, {255,34,0}, {255,51,0}, {255,68,0}, {255,85,0}, {255,102,0}, {255,119,0}, {255,136,0}, {255,153,0},
+  {255,170,0}, {255,187,0}, {255,204,0}, {255,221,0}, {255,238,0}, {255,255,0}, {238,255,0}, {221,255,0}, {204,255,0}, {187,255,0},
+  {170,255,0}, {153,255,0}, {136,255,0}, {119,255,0}, {102,255,0}, {85,255,0}, {68,255,0}, {51,255,0}, {34,255,0}, {17,255,0},
+  {0,255,0}, {0,255,17}, {0,255,34}, {0,255,51}, {0,255,68}, {0,255,85}, {0,255,102}, {0,255,119}, {0,255,136}, {0,255,153},
+  {0,255,170}, {0,255,187}, {0,255,204}, {0,255,221}, {0,255,238}, {0,255,255}, {0,238,255}, {0,221,255}, {0,204,255}, {0,187,255},
+  {0,170,255}, {0,153,255}, {0,136,255}, {0,119,255}, {0,102,255}, {0,85,255}, {0,68,255}, {0,51,255}, {0,34,255}, {0,17,255}
+};
+
+const uint8_t LEDAnimations::RAINBOW_TABLE_SIZE = sizeof(LEDAnimations::rainbowTable) / sizeof(LEDAnimations::rainbowTable[0]);
+
+// Precomputed sine lookup table (0-255 range for (sin(angle) + 1.0) / 2.0 * 255)
+// This table replaces floating-point sin() calculations.
+const uint8_t LEDAnimations::sineLookup[SINE_LOOKUP_SIZE] PROGMEM = {
+  128, 140, 152, 164, 176, 187, 198, 208, 218, 227, 235, 242, 248, 252, 255, 255, 255, 252, 248, 242, 235, 227, 218, 208, 198, 187, 176, 164, 152, 140, 128, 116, 104, 92, 80, 69, 58, 48, 38, 29, 21, 14, 8, 4, 1, 0, 0, 1, 4, 8, 14, 21, 29, 38, 48, 58, 69, 80, 92, 104, 116, 128
+};
+
+// Animation timing lookup table in PROGMEM
+struct AnimationTiming {
+  uint8_t animType;
+  uint16_t interval;
+  uint16_t briefDuration; // For ack/nack
+};
+
+const AnimationTiming timingTable[] PROGMEM = {
+  {ANIM_ACK, 100, 300},
+  {ANIM_NACK, 100, 300},
+  {ANIM_RED_BLUE, 150, 0},
+  {ANIM_TRAFFIC, 800, 0},
+  {ANIM_MATRIX, 50, 0},
+  {ANIM_RAINBOW, 30, 0},
+  {ANIM_PULSE_RED, 30, 0},
+  {ANIM_PULSE_BLUE, 30, 0},
+  {ANIM_STROBE, 100, 0},
+  {ANIM_FIRE, 80, 0},
+  {ANIM_OCEAN, 40, 0},
+  {ANIM_THINKING, 200, 0}
+};
+
+const int numTimings = sizeof(timingTable) / sizeof(timingTable[0]);
+
+
+LEDAnimations::LEDAnimations(int redPin, int greenPin, int bluePin) {
+  this->redPin = redPin;
+  this->greenPin = greenPin;
+  this->bluePin = bluePin;
+  
+  // Initialize state
+  animationMode = ANIM_OFF;
+  animationEndTime = 0;
+  lastAnimationUpdate = 0;
+  animationStep = 0;
+  animationInterval = 500;
+  animationIndex = 0;   // Initialize new integer index for sine waves
+  animationIndex2 = 0;  // Initialize second integer index for ocean effect
+  ackFlashState = false;
+  debugMode = false;
+}
+
+
 void LEDAnimations::begin(bool debugMode) {
   this->debugMode = debugMode;
 
@@ -50,18 +102,6 @@ void LEDAnimations::begin(bool debugMode) {
   setColor(0, 0, 0); // Start with LED off
 }
 
-// Rainbow color lookup table - 60 entries covering full spectrum
-// This replaces the floating-point HSV calculation entirely
-const uint8_t rainbowTable[][3] PROGMEM = {
-  {255,0,0}, {255,17,0}, {255,34,0}, {255,51,0}, {255,68,0}, {255,85,0}, {255,102,0}, {255,119,0}, {255,136,0}, {255,153,0},
-  {255,170,0}, {255,187,0}, {255,204,0}, {255,221,0}, {255,238,0}, {255,255,0}, {238,255,0}, {221,255,0}, {204,255,0}, {187,255,0},
-  {170,255,0}, {153,255,0}, {136,255,0}, {119,255,0}, {102,255,0}, {85,255,0}, {68,255,0}, {51,255,0}, {34,255,0}, {17,255,0},
-  {0,255,0}, {0,255,17}, {0,255,34}, {0,255,51}, {0,255,68}, {0,255,85}, {0,255,102}, {0,255,119}, {0,255,136}, {0,255,153},
-  {0,255,170}, {0,255,187}, {0,255,204}, {0,255,221}, {0,255,238}, {0,255,255}, {0,238,255}, {0,221,255}, {0,204,255}, {0,187,255},
-  {0,170,255}, {0,153,255}, {0,136,255}, {0,119,255}, {0,102,255}, {0,85,255}, {0,68,255}, {0,51,255}, {0,34,255}, {0,17,255}
-};
-
-const uint8_t RAINBOW_TABLE_SIZE = sizeof(rainbowTable) / sizeof(rainbowTable[0]);
 
 // Get rainbow color by index (0-59) - replaces HSV conversion
 void LEDAnimations::getRainbowColor(uint8_t index, uint8_t &r, uint8_t &g, uint8_t &b) {
@@ -134,20 +174,20 @@ void LEDAnimations::update() {
 
     case ANIM_TRAFFIC: // red-green-yellow traffic light
       switch (animationStep % 3) {
-        case 0: setColor(255, 0, 0); break;   // Red
-        case 1: setColor(0, 255, 0); break;   // Green
+        case 0: setColor(255, 0, 0); break;  // Red
+        case 1: setColor(0, 255, 0); break;  // Green
         case 2: setColor(255, 255, 0); break; // Yellow
       }
       animationStep++;
       break;
 
-    case ANIM_MATRIX: // Matrix effect - green fade
+    case ANIM_MATRIX: // Matrix effect - green fade using sine lookup
       {
-        float intensity = (sin(animationPhase) + 1.0) / 2.0; // 0.0 to 1.0
-        uint8_t green = (uint8_t)(intensity * 255);
+        // Read intensity from PROGMEM sine table
+        uint8_t green = pgm_read_byte(&sineLookup[animationIndex]);
         setColor(0, green, 0);
-        animationPhase += 0.1;
-        if (animationPhase > 6.28) animationPhase = 0; // Reset at 2π
+        // Increment index for next step, wrap around table size
+        animationIndex = (animationIndex + 1) % SINE_LOOKUP_SIZE;
       }
       break;
 
@@ -161,23 +201,23 @@ void LEDAnimations::update() {
       }
       break;
 
-    case ANIM_PULSE_RED: // Pulse red
+    case ANIM_PULSE_RED: // Pulse red using sine lookup
       {
-        float intensity = (sin(animationPhase) + 1.0) / 2.0; // 0.0 to 1.0
-        uint8_t red = (uint8_t)(intensity * 255);
+        // Read intensity from PROGMEM sine table
+        uint8_t red = pgm_read_byte(&sineLookup[animationIndex]);
         setColor(red, 0, 0);
-        animationPhase += 0.15;
-        if (animationPhase > 6.28) animationPhase = 0;
+        // Increment index for next step (faster pulse), wrap around table size
+        animationIndex = (animationIndex + 2) % SINE_LOOKUP_SIZE; 
       }
       break;
 
-    case ANIM_PULSE_BLUE: // Pulse blue
+    case ANIM_PULSE_BLUE: // Pulse blue using sine lookup
       {
-        float intensity = (sin(animationPhase) + 1.0) / 2.0; // 0.0 to 1.0
-        uint8_t blue = (uint8_t)(intensity * 255);
+        // Read intensity from PROGMEM sine table
+        uint8_t blue = pgm_read_byte(&sineLookup[animationIndex]);
         setColor(0, 0, blue);
-        animationPhase += 0.15;
-        if (animationPhase > 6.28) animationPhase = 0;
+        // Increment index for next step (faster pulse), wrap around table size
+        animationIndex = (animationIndex + 2) % SINE_LOOKUP_SIZE;
       }
       break;
 
@@ -200,15 +240,21 @@ void LEDAnimations::update() {
       }
       break;
 
-    case ANIM_OCEAN: // Ocean wave effect
+    case ANIM_OCEAN: // Ocean wave effect using sine lookup
       {
-        float wave1 = (sin(animationPhase) + 1.0) / 2.0;
-        float wave2 = (sin(animationPhase * 1.3 + 1.0) + 1.0) / 2.0;
-        uint8_t blue = (uint8_t)(wave1 * 255);
-        uint8_t cyan = (uint8_t)(wave2 * 100); // Add some cyan
+        // Read wave intensities from PROGMEM sine table using two different indices
+        uint8_t blue_intensity = pgm_read_byte(&sineLookup[animationIndex]);
+        uint8_t cyan_intensity = pgm_read_byte(&sineLookup[animationIndex2]);
+
+        // Scale cyan intensity to 0-100 range as per original logic
+        uint8_t blue = blue_intensity;
+        uint8_t cyan = (uint8_t)(cyan_intensity * 100 / 255); 
+        
         setColor(0, cyan, blue);
-        animationPhase += 0.08;
-        if (animationPhase > 6.28) animationPhase = 0;
+
+        // Increment indices for different wave speeds, wrap around table size
+        animationIndex = (animationIndex + 1) % SINE_LOOKUP_SIZE;
+        animationIndex2 = (animationIndex2 + 2) % SINE_LOOKUP_SIZE; // Faster wave for cyan
       }
       break;
 
@@ -218,14 +264,17 @@ void LEDAnimations::update() {
         int colorIndex = (animationStep / 3) % 4; // Each color lasts 3 steps
         int fadeStep = animationStep % 3;         // 0=fade in, 1=hold, 2=fade out
         
-        float intensity = (fadeStep == 0) ? 0.6 : (fadeStep == 1) ? 1.0 : 0.4;
-        uint8_t brightness = (uint8_t)(intensity * 180); // Not full brightness for subtlety
+        // This still uses float for intensity calculation. If further memory optimization
+        // is needed, this could also be replaced with a small lookup table or
+        // fixed-point arithmetic if the exact values are critical.
+        float intensity_float = (fadeStep == 0) ? 0.6 : (fadeStep == 1) ? 1.0 : 0.4;
+        uint8_t brightness = (uint8_t)(intensity_float * 180); // Not full brightness for subtlety
         
         switch (colorIndex) {
-          case 0: setColor(0, brightness, 0); break;           // Green
-          case 1: setColor(brightness, 0, 0); break;           // Red  
-          case 2: setColor(brightness, brightness, 0); break;  // Yellow
-          case 3: setColor(0, 0, brightness); break;           // Blue
+          case 0: setColor(0, brightness, 0); break;          // Green
+          case 1: setColor(brightness, 0, 0); break;          // Red 
+          case 2: setColor(brightness, brightness, 0); break; // Yellow
+          case 3: setColor(0, 0, brightness); break;          // Blue
         }
         animationStep++;
       }
@@ -237,35 +286,12 @@ void LEDAnimations::update() {
   }
 }
 
-// Animation timing lookup table in PROGMEM
-struct AnimationTiming {
-  uint8_t animType;
-  uint16_t interval;
-  uint16_t briefDuration; // For ack/nack
-};
-
-const AnimationTiming timingTable[] PROGMEM = {
-  {ANIM_ACK, 100, 300},
-  {ANIM_NACK, 100, 300},
-  {ANIM_RED_BLUE, 150, 0},
-  {ANIM_TRAFFIC, 800, 0},
-  {ANIM_MATRIX, 50, 0},
-  {ANIM_RAINBOW, 30, 0},
-  {ANIM_PULSE_RED, 30, 0},
-  {ANIM_PULSE_BLUE, 30, 0},
-  {ANIM_STROBE, 100, 0},
-  {ANIM_FIRE, 80, 0},
-  {ANIM_OCEAN, 40, 0},
-  {ANIM_THINKING, 200, 0}
-};
-
-const int numTimings = sizeof(timingTable) / sizeof(timingTable[0]);
-
 // Start LED animation - optimized with lookup table
 void LEDAnimations::startAnimation(int animType, int durationSeconds) {
-  animationMode = animType;
+  animationMode = (AnimationMode)animType; // Cast to enum type
   animationStep = 0;
-  animationPhase = 0.0;
+  animationIndex = 0;   // Reset sine lookup index
+  animationIndex2 = 0;  // Reset second sine lookup index
   lastAnimationUpdate = 0;
 
   // Find timing in table

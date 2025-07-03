@@ -8,26 +8,29 @@
 #define LEDANIMATIONS_H
 
 #include <Arduino.h>
+#include <avr/pgmspace.h> // Required for PROGMEM
 
 // Animation mode constants
-#define ANIM_OFF 0
-#define ANIM_ACK 1
-#define ANIM_NACK 2
-#define ANIM_RED_BLUE 3
-#define ANIM_TRAFFIC 4
-#define ANIM_MATRIX 5
-#define ANIM_RAINBOW 6
-#define ANIM_PULSE_RED 7
-#define ANIM_PULSE_BLUE 8
-#define ANIM_STROBE 9
-#define ANIM_FIRE 10
-#define ANIM_OCEAN 11
-#define ANIM_THINKING 12
+enum AnimationMode {
+  ANIM_OFF,
+  ANIM_ACK,
+  ANIM_NACK,
+  ANIM_RED_BLUE,
+  ANIM_TRAFFIC,
+  ANIM_MATRIX,
+  ANIM_RAINBOW,
+  ANIM_PULSE_RED,
+  ANIM_PULSE_BLUE,
+  ANIM_STROBE,
+  ANIM_FIRE,
+  ANIM_OCEAN,
+  ANIM_THINKING
+};
 
 // Command structure for LED animations
 struct LEDCommand {
   const char* name;
-  int animationType;
+  uint8_t animationType; // Changed to uint8_t for consistency with enum
   bool requiresDuration;
 };
 
@@ -37,12 +40,13 @@ private:
   int redPin, greenPin, bluePin;
   
   // Animation state
-  int animationMode;
+  AnimationMode animationMode; // Changed to enum type
   unsigned long animationEndTime;
   unsigned long lastAnimationUpdate;
   int animationStep;
   int animationInterval;
-  float animationPhase;
+  uint8_t animationIndex;   // New: Integer index for sine wave animations
+  uint8_t animationIndex2;  // New: Second integer index for ocean effect
   bool ackFlashState;
   bool debugMode;
   
@@ -51,9 +55,14 @@ private:
   static const int numCommands;
   
   // Internal methods
-  void hsvToRgb(float h, float s, float v, uint8_t &r, uint8_t &g, uint8_t &b);
+  // Removed hsvToRgb as it's no longer used with the lookup table approach
   void setColor(uint8_t red, uint8_t green, uint8_t blue);
   void getRainbowColor(uint8_t index, uint8_t &r, uint8_t &g, uint8_t &b);
+
+  // PROGMEM tables
+  static const uint8_t rainbowTable[][3]; // Declaration for rainbow table
+  static const uint8_t RAINBOW_TABLE_SIZE; // Declaration for rainbow table size
+  static const uint8_t sineLookup[]; // New: Declaration for sine lookup table
   
 public:
   // Constructor
