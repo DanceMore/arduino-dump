@@ -111,9 +111,9 @@ const CommandHelp DISPLAY_COMMANDS[] PROGMEM = {
     {HELP_DISP_TEXT, nullptr, true},
     {HELP_DISP_NUM, nullptr, true},
     {HELP_DISP_CLR, nullptr, true},
-    {HELP_DISP_BRT, nullptr, false},
-    {HELP_DISP_ON, nullptr, false},
-    {HELP_DISP_OFF, nullptr, false}
+    {HELP_DISP_BRT, nullptr, true},
+    {HELP_DISP_ON, nullptr, true},
+    {HELP_DISP_OFF, nullptr, true}
 };
 
 const CommandHelp LED_COMMANDS[] PROGMEM = {
@@ -123,12 +123,12 @@ const CommandHelp LED_COMMANDS[] PROGMEM = {
     {HELP_LED_TRAFFIC, nullptr, true},
     {HELP_LED_MATRIX, nullptr, true},
     {HELP_LED_RAINBOW, nullptr, true},
-    {HELP_LED_PULSE_RED, nullptr, false},
-    {HELP_LED_PULSE_BLUE, nullptr, false},
-    {HELP_LED_STROBE, nullptr, false},
-    {HELP_LED_FIRE, nullptr, false},
-    {HELP_LED_OCEAN, nullptr, false},
-    {HELP_LED_THINKING, nullptr, false},
+    {HELP_LED_PULSE_RED, nullptr, true},
+    {HELP_LED_PULSE_BLUE, nullptr, true},
+    {HELP_LED_STROBE, nullptr, true},
+    {HELP_LED_FIRE, nullptr, true},
+    {HELP_LED_OCEAN, nullptr, true},
+    {HELP_LED_THINKING, nullptr, true},
     {HELP_LED_OFF, nullptr, true}
 };
 

@@ -1,6 +1,7 @@
 #include <IRremote.h>
 #include "LEDAnimations.h"
 #include "DisplayController.h"
+#include "StringConstants.h"
 
 // TM1637 Display Configuration
 const int CLK = 5;
@@ -143,19 +144,8 @@ void processSerialCommand() {
 
       } else if (DEBUG_MODE) {
         Serial.println("LED commands:");
-        Serial.println("  LED:ack - Quick green flash");
-        Serial.println("  LED:nack - Quick red flash");
-        Serial.println("  LED:red-blue 30 - Police style");
-        Serial.println("  LED:red-green-yellow 60 - Traffic light");
-        Serial.println("  LED:matrix 45 - Green Matrix fade");
-        Serial.println("  LED:rainbow 60 - Rainbow hue shift");
-        Serial.println("  LED:pulse-red 30 - Red pulsing");
-        Serial.println("  LED:pulse-blue 30 - Blue pulsing");
-        Serial.println("  LED:strobe 15 - White strobe");
-        Serial.println("  LED:fire 40 - Fire flicker");
-        Serial.println("  LED:ocean 50 - Ocean waves");
-        Serial.println("  LED:thinking 20 - Simon thinking");
-        Serial.println("  LED:off - Turn off");
+        StringManager::printLEDHelp();
+
       }
 
     } else if (DEBUG_MODE) {
@@ -204,27 +194,10 @@ void setup() {
     Serial.print("  - RGB LED: "); Serial.println("Common Anode (Pins 9,6,3)");
     Serial.println();
     Serial.println("Display Commands:");
-    Serial.println("  DISP:text    - Display text (up to 4 chars)");
-    Serial.println("  DISP:1234    - Display number");
-    Serial.println("  DISP:CLR     - Clear display");
-    Serial.println("  DISP:BRT:7   - Set brightness (0-7)");
-    Serial.println("  DISP:ON      - Turn display on");
-    Serial.println("  DISP:OFF     - Turn display off");
+    StringManager::printDisplayHelp();
     Serial.println();
     Serial.println("Enhanced LED Animation Commands:");
-    Serial.println("  LED:ack                    - Quick green acknowledgment flash");
-    Serial.println("  LED:nack                   - Quick red alt acknowledgment flash");
-    Serial.println("  LED:red-blue 30            - Police style for 30 seconds");
-    Serial.println("  LED:red-green-yellow 60    - Traffic light for 60 seconds");
-    Serial.println("  LED:matrix 45              - Green Matrix fade for 45 seconds");
-    Serial.println("  LED:rainbow 60             - Rainbow hue shift for 60 seconds");
-    Serial.println("  LED:pulse-red 30           - Red pulsing for 30 seconds");
-    Serial.println("  LED:pulse-blue 30          - Blue pulsing for 30 seconds");
-    Serial.println("  LED:strobe 15              - White strobe for 15 seconds");
-    Serial.println("  LED:fire 40                - Fire flicker for 40 seconds");
-    Serial.println("  LED:ocean 50               - Ocean waves for 50 seconds");
-    Serial.println("  LED:thinking 20 - Simon-like thinking");
-    Serial.println("  LED:off                    - Turn off LED");
+    StringManager::printLEDHelp();
     Serial.println();
     Serial.println("Remove jumper and restart for production mode");
     Serial.println("Waiting for IR signals and commands...");
@@ -236,11 +209,11 @@ void setup() {
 
   } else {
     // Flipper Zero compatible startup
-    Serial.println("ir rx");
-    Serial.println("Receiving...");
-    Serial.println("Press Ctrl+C to stop");
-    Serial.println("(Insert Pin 10->GND jumper and restart for debug mode)");
-    Serial.println("Commands: DISP:text, DISP:CLR, LED:ack, LED:matrix 45, LED:rainbow 60, LED:off");
+    Serial.println(F("ir rx"));
+    Serial.println(F("Receiving..."));
+    Serial.println(F("Press Ctrl+C to stop"));
+    Serial.println(F("(Insert Pin 10->GND jumper and restart for debug mode)"));
+    Serial.println(F("Commands: DISP:text, DISP:CLR, LED:ack, LED:matrix 45, LED:rainbow 60, LED:off"));
 
     // Show "----" on display in production mode
     displayController.showDashes();
@@ -391,7 +364,7 @@ void loop() {
       }
     } else if (DEBUG_MODE && isNoise && !isRepeat) {
       // In debug mode, show filtered noise signals with a simple indicator
-      Serial.println("[NOISE FILTERED]");
+      Serial.println(F("[NOISE FILTERED]"));
     }
 
     // Enable receiving of the next IR signal
