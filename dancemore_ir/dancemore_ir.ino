@@ -57,7 +57,7 @@ void processSerialCommand() {
 
     // Unknown command
     if (DEBUG_MODE) {
-      Serial.println("Commands: DISP:text, DISP:CLR, DISP:ON, DISP:OFF, DISP:BRT:n");
+      Serial.println(F("Commands: DISP:text, DISP:CLR, DISP:ON, DISP:OFF, DISP:BRT:n"));
       ledAnimations.printHelp();
     }
   }
@@ -91,26 +91,26 @@ void setup() {
 
   if (DEBUG_MODE) {
     // Debug mode startup
-    Serial.println("=== Arduino IR Receiver + TM1637 Display + Enhanced RGB LED (DEBUG MODE) ===");
-    Serial.println("Configuration:");
-    Serial.print("  - Debug Jumper: "); Serial.println("INSTALLED (Pin 10 -> GND)");
-    Serial.print("  - Debug Mode: "); Serial.println("ON");
-    Serial.print("  - Show Repeats: "); Serial.println(SHOW_REPEATS ? "ON" : "OFF");
-    Serial.print("  - Show Raw Data: "); Serial.println(SHOW_RAW_DATA ? "ON" : "OFF");
-    Serial.print("  - Baud Rate: "); Serial.println(BAUD_RATE);
-    Serial.print("  - Display: "); Serial.println("TM1637 4-Digit 7-Segment");
-    Serial.print("  - RGB LED: "); Serial.println("Common Anode (Pins 9,6,3)");
+    Serial.println(F("=== Arduino IR Receiver + TM1637 Display + Enhanced RGB LED (DEBUG MODE) ==="));
+    Serial.println(F("Configuration:"));
+    Serial.print(F("  - Debug Jumper: ")); Serial.println("INSTALLED (Pin 10 -> GND)");
+    Serial.print(F("  - Debug Mode: ")); Serial.println("ON");
+    Serial.print(F("  - Show Repeats: ")); Serial.println(SHOW_REPEATS ? "ON" : "OFF");
+    Serial.print(F("  - Show Raw Data: ")); Serial.println(SHOW_RAW_DATA ? "ON" : "OFF");
+    Serial.print(F("  - Baud Rate: ")); Serial.println(BAUD_RATE);
+    Serial.print(F("  - Display: ")); Serial.println("TM1637 4-Digit 7-Segment");
+    Serial.print(F("  - RGB LED: ")); Serial.println("Common Anode (Pins 9,6,3)");
     Serial.println();
-    Serial.println("Display Commands:");
+    Serial.println(F("Display Commands:"));
     StringManager::printDisplayHelp();
     Serial.println();
-    Serial.println("Enhanced LED Animation Commands:");
+    Serial.println(F("Enhanced LED Animation Commands:"));
     StringManager::printLEDHelp();
     Serial.println();
-    Serial.println("Remove jumper and restart for production mode");
-    Serial.println("Waiting for IR signals and commands...");
-    Serial.println("Format: Protocol | Address | Command | Raw Value | Bits | Time");
-    Serial.println("---");
+    Serial.println(F("Remove jumper and restart for production mode"));
+    Serial.println(F("Waiting for IR signals and commands..."));
+    Serial.println(F("Format: Protocol | Address | Command | Raw Value | Bits | Time"));
+    Serial.println(F("---"));
 
     // Show "REDY" on display in debug mode
     displayController.showReady();
