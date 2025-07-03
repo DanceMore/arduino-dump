@@ -46,26 +46,26 @@ bool DisplayController::processCommand(String command) {
 
     if (param == "CLR") {
         clear();
-        if (debugMode) Serial.println("Display cleared");
+        if (debugMode) Serial.println(F("Display cleared"));
 
     } else if (param == "ON") {
         turnOn();
-        if (debugMode) Serial.println("Display turned ON");
+        if (debugMode) Serial.println(F("Display turned ON"));
 
     } else if (param == "OFF") {
         turnOff();
-        if (debugMode) Serial.println("Display turned OFF");
+        if (debugMode) Serial.println(F("Display turned OFF"));
 
     } else if (param.startsWith("BRT:")) {
         int brightness = param.substring(4).toInt();
         if (brightness >= 0 && brightness <= 7) {
             setBrightness(brightness);
             if (debugMode) {
-                Serial.print("Display brightness set to: ");
+                Serial.print(F("Display brightness set to: "));
                 Serial.println(brightness);
             }
         } else if (debugMode) {
-            Serial.println("Invalid brightness (0-7)");
+            Serial.println(F("Invalid brightness (0-7)"));
         }
 
     } else {
@@ -73,11 +73,11 @@ bool DisplayController::processCommand(String command) {
         if (displayEnabled) {
             displayText(param);
             if (debugMode) {
-                Serial.print("Displayed: ");
+                Serial.print(F("Displayed: "));
                 Serial.println(param);
             }
         } else if (debugMode) {
-            Serial.println("Display is OFF - use DISP:ON to enable");
+            Serial.println(F("Display is OFF - use DISP:ON to enable"));
         }
     }
 

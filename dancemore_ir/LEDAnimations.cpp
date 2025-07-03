@@ -363,7 +363,7 @@ bool LEDAnimations::processCommand(const String& command) {
   for (int i = 0; i < numCommands; i++) {
     char cmdName[20];
     strcpy_P(cmdName, (char*)pgm_read_ptr(&(commands[i].name)));
-    
+
     bool requiresDuration = pgm_read_byte(&(commands[i].requiresDuration));
     uint8_t animationType = pgm_read_byte(&(commands[i].animationType));
 
@@ -406,7 +406,7 @@ void LEDAnimations::printHelp() {
     char cmdName[20];
     strcpy_P(cmdName, (char*)pgm_read_ptr(&(commands[i].name)));
     bool requiresDuration = pgm_read_byte(&(commands[i].requiresDuration));
-    
+
     Serial.print(F("  LED:"));
     Serial.print(cmdName);
     if (requiresDuration) {
