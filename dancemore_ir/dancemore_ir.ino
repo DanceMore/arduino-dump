@@ -19,7 +19,6 @@
  * - LED:red-blue 30         -> Fast police-style red/blue for 30 seconds
  * - LED:red-green-yellow 60 -> Slow traffic light cycle for 60 seconds
  * - LED:ack                 -> Quick green flash for command acknowledgment
- * - LED:nack                -> Quick red flash for alt acknowledgement
  * - LED:matrix 45           -> Green Matrix-style fade effect for 45 seconds
  * - LED:rainbow 60          -> Rainbow hue shift for 60 seconds
  * - LED:pulse-red 30        -> Red pulsing effect for 30 seconds
@@ -57,6 +56,7 @@
 
 #include <IRremote.h>
 #include <TM1637Display.h>
+#include "LEDAnimations.h"
 
 // TM1637 Display Configuration
 const int CLK = 5;
@@ -67,6 +67,9 @@ TM1637Display display(CLK, DIO);
 const int RED_PIN = 9;
 const int GREEN_PIN = 6;
 const int BLUE_PIN = 3;
+
+// LED Animation object
+LEDAnimations ledAnimations(RED_PIN, GREEN_PIN, BLUE_PIN);
 
 // Configuration (will be overridden by jumper detection)
 bool DEBUG_MODE = false;                 // Determined by jumper on pin 10
@@ -86,297 +89,6 @@ unsigned long lastSignalTime = 0;
 // Display variables
 uint8_t displayBrightness = 4;           // Default brightness (0-7)
 bool displayEnabled = true;
-
-// LED Animation variables
-+int animationMode = 0;                   // 0=off, 1=ack, 2=red-blue, 3=traffic, 4=matrix, 5=rainbow, 6=pulse-red, 7=pulse-blue, 8=strobe, 9=fire, 10=ocean, 11=thinking
-unsigned long animationEndTime = 0;
-unsigned long lastAnimationUpdate = 0;
-int animationStep = 0;
-int animationInterval = 500;             // Default interval in ms
-float animationPhase = 0.0;              // For smooth animations
-bool ackFlashState = false;              // For acknowledgment flash
-
-// HSV to RGB conversion for rainbow effect
-void hsvToRgb(float h, float s, float v, uint8_t &r, uint8_t &g, uint8_t &b) {
-  float c = v * s;
-  float x = c * (1 - abs(fmod(h / 60.0, 2) - 1));
-  float m = v - c;
-
-  float r1, g1, b1;
-  if (h >= 0 && h < 60) {
-    r1 = c; g1 = x; b1 = 0;
-  } else if (h >= 60 && h < 120) {
-    r1 = x; g1 = c; b1 = 0;
-  } else if (h >= 120 && h < 180) {
-    r1 = 0; g1 = c; b1 = x;
-  } else if (h >= 180 && h < 240) {
-    r1 = 0; g1 = x; b1 = c;
-  } else if (h >= 240 && h < 300) {
-    r1 = x; g1 = 0; b1 = c;
-  } else {
-    r1 = c; g1 = 0; b1 = x;
-  }
-
-  r = (uint8_t)((r1 + m) * 255);
-  g = (uint8_t)((g1 + m) * 255);
-  b = (uint8_t)((b1 + m) * 255);
-}
-
-// Set RGB LED color (Common Anode - inverted logic)
-void setColor(uint8_t red, uint8_t green, uint8_t blue) {
-  analogWrite(RED_PIN, 255 - red);
-  analogWrite(GREEN_PIN, 255 - green);
-  analogWrite(BLUE_PIN, 255 - blue);
-}
-
-// Update LED animation
-void updateLEDAnimation() {
-  unsigned long currentTime = millis();
-
-  // Check if animation should end
-  if (animationEndTime > 0 && currentTime > animationEndTime) {
-    animationMode = 0;
-    setColor(0, 0, 0);
-    return;
-  }
-
-  // Check if it's time to update animation
-  if (currentTime - lastAnimationUpdate < animationInterval) {
-    return;
-  }
-
-  lastAnimationUpdate = currentTime;
-
-  switch (animationMode) {
-    case 1: // Quick acknowledgment flash
-      if (animationStep == 0) {
-        setColor(0, 64, 0); // Bright green
-        ackFlashState = true;
-      } else if (animationStep == 1) {
-        setColor(0, 0, 0); // Off
-        ackFlashState = false;
-        animationMode = 0; // End after one flash
-        animationEndTime = 0;
-      }
-      animationStep++;
-      break;
-
-    case 2: // Quick negative acknowledgment flash (red)
-      if (animationStep == 0) {
-        setColor(128, 0, 0); // Bright red
-        ackFlashState = true;
-      } else if (animationStep == 1) {
-        setColor(0, 0, 0); // Off
-        ackFlashState = false;
-        animationMode = 0; // End after one flash
-        animationEndTime = 0;
-      }
-      animationStep++;
-      break;
-
-    case 3: // red-blue police style
-      if (animationStep % 2 == 0) {
-        setColor(255, 0, 0); // Red
-      } else {
-        setColor(0, 0, 255); // Blue
-      }
-      animationStep++;
-      break;
-
-    case 4: // red-green-yellow traffic light
-      switch (animationStep % 3) {
-        case 0: setColor(255, 0, 0); break;   // Red
-        case 1: setColor(0, 255, 0); break;   // Green
-        case 2: setColor(255, 255, 0); break; // Yellow
-      }
-      animationStep++;
-      break;
-
-    case 5: // Matrix effect - green fade
-      {
-        float intensity = (sin(animationPhase) + 1.0) / 2.0; // 0.0 to 1.0
-        uint8_t green = (uint8_t)(intensity * 255);
-        setColor(0, green, 0);
-        animationPhase += 0.1;
-        if (animationPhase > 6.28) animationPhase = 0; // Reset at 2π
-      }
-      break;
-
-    case 6: // Rainbow hue shift
-      {
-        uint8_t r, g, b;
-        float hue = fmod(animationPhase * 10, 360); // Cycle through hues
-        hsvToRgb(hue, 1.0, 1.0, r, g, b);
-        setColor(r, g, b);
-        animationPhase += 0.05;
-        if (animationPhase > 36.0) animationPhase = 0; // Reset
-      }
-      break;
-
-    case 7: // Pulse red
-      {
-        float intensity = (sin(animationPhase) + 1.0) / 2.0; // 0.0 to 1.0
-        uint8_t red = (uint8_t)(intensity * 255);
-        setColor(red, 0, 0);
-        animationPhase += 0.15;
-        if (animationPhase > 6.28) animationPhase = 0;
-      }
-      break;
-
-    case 8: // Pulse blue
-      {
-        float intensity = (sin(animationPhase) + 1.0) / 2.0; // 0.0 to 1.0
-        uint8_t blue = (uint8_t)(intensity * 255);
-        setColor(0, 0, blue);
-        animationPhase += 0.15;
-        if (animationPhase > 6.28) animationPhase = 0;
-      }
-      break;
-
-    case 9: // Strobe white
-      if (animationStep % 2 == 0) {
-        setColor(255, 255, 255); // White
-      } else {
-        setColor(0, 0, 0); // Off
-      }
-      animationStep++;
-      break;
-
-    case 10: // Fire effect
-      {
-        // Random flicker between red and orange
-        uint8_t red = 200 + random(56);     // 200-255
-        uint8_t green = random(100);        // 0-99 for orange tint
-        uint8_t blue = 0;
-        setColor(red, green, blue);
-      }
-      break;
-
-    case 11: // Ocean wave effect
-      {
-        float wave1 = (sin(animationPhase) + 1.0) / 2.0;
-        float wave2 = (sin(animationPhase * 1.3 + 1.0) + 1.0) / 2.0;
-        uint8_t blue = (uint8_t)(wave1 * 255);
-        uint8_t cyan = (uint8_t)(wave2 * 100); // Add some cyan
-        setColor(0, cyan, blue);
-        animationPhase += 0.08;
-        if (animationPhase > 6.28) animationPhase = 0;
-      }
-      break;
-
-    case 11: // Thinking - Simon-like sequence
-      {
-        // Cycle through: green, red, yellow, blue with smooth fade
-        int colorIndex = (animationStep / 3) % 4; // Each color lasts 3 steps
-        int fadeStep = animationStep % 3;         // 0=fade in, 1=hold, 2=fade out
-        
-        float intensity = (fadeStep == 0) ? 0.6 : (fadeStep == 1) ? 1.0 : 0.4;
-        uint8_t brightness = (uint8_t)(intensity * 180); // Not full brightness for subtlety
-        
-        switch (colorIndex) {
-          case 0: setColor(0, brightness, 0); break;           // Green
-          case 1: setColor(brightness, 0, 0); break;           // Red  
-          case 2: setColor(brightness, brightness, 0); break;  // Yellow
-          case 3: setColor(0, 0, brightness); break;           // Blue
-        }
-        animationStep++;
-      }
-      break;
-
-    default: // Off
-      setColor(0, 0, 0);
-      break;
-  }
-}
-
-// Start LED animation
-void startLEDAnimation(int animType, int durationSeconds) {
-  animationMode = animType;
-  animationStep = 0;
-  animationPhase = 0.0;
-  lastAnimationUpdate = 0;
-
-  switch (animType) {
-    case 1: // Quick acknowledgment flash (green)
-    case 2: // Quick negative acknowledgment flash (red)
-      animationInterval = 100;
-      animationEndTime = millis() + 300; // 300ms total
-      break;
-
-    case 3: // Red-blue police style - fast
-      animationInterval = 150;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case 4: // Traffic light - slow
-      animationInterval = 800;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case 5: // Matrix effect
-      animationInterval = 50;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case 6: // Rainbow
-      animationInterval = 30;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case 7: // Pulse red
-    case 8: // Pulse blue
-      animationInterval = 30;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case 9: // Strobe
-      animationInterval = 100;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case 10: // Fire
-      animationInterval = 80;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case 11: // Ocean
-      animationInterval = 40;
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    case 11: // Thinking - Simon sequence
-      animationInterval = 200; // 200ms per step = 600ms per color
-      animationEndTime = millis() + (durationSeconds * 1000UL);
-      break;
-
-    default: // Turn off
-      animationEndTime = 0;
-      setColor(0, 0, 0);
-      break;
-  }
-
-  if (DEBUG_MODE && animType != 1) { // Don't spam debug for ack flashes
-    Serial.print("LED animation started: mode ");
-    Serial.print(animType);
-    if (durationSeconds > 0) {
-      Serial.print(", duration ");
-      Serial.print(durationSeconds);
-      Serial.println(" seconds");
-    } else {
-      Serial.println(" (brief)");
-    }
-  }
-}
-
-// Quick acknowledgment flash
-void flashAck() {
-  startLEDAnimation(1, 0); // Mode 1, no duration needed
-}
-
-// Quick negative acknowledgment flash
-void flashNack() {
-  startLEDAnimation(2, 0); // Mode 2, no duration needed
-}
 
 // Check if debug jumper is installed
 bool isDebugJumperInstalled() {
@@ -424,18 +136,15 @@ void processSerialCommand() {
       String param = command.substring(4);
 
       if (param == "off") {
-        startLEDAnimation(0, 0);
+        ledAnimations.off();
 
       } else if (param == "ack") {
-        flashAck();
-
-      } else if (param == "nack") {
-        flashNack();
+        ledAnimations.flashAck();
 
       } else if (param.startsWith("red-blue ")) {
         int duration = param.substring(9).toInt();
         if (duration > 0) {
-          startLEDAnimation(3, duration);
+          ledAnimations.startAnimation(ANIM_RED_BLUE, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for red-blue animation");
         }
@@ -443,7 +152,7 @@ void processSerialCommand() {
       } else if (param.startsWith("red-green-yellow ")) {
         int duration = param.substring(17).toInt();
         if (duration > 0) {
-          startLEDAnimation(4, duration);
+          ledAnimations.startAnimation(ANIM_TRAFFIC, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for red-green-yellow animation");
         }
@@ -451,7 +160,7 @@ void processSerialCommand() {
       } else if (param.startsWith("matrix ")) {
         int duration = param.substring(7).toInt();
         if (duration > 0) {
-          startLEDAnimation(5, duration);
+          ledAnimations.startAnimation(ANIM_MATRIX, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for matrix animation");
         }
@@ -459,7 +168,7 @@ void processSerialCommand() {
       } else if (param.startsWith("rainbow ")) {
         int duration = param.substring(8).toInt();
         if (duration > 0) {
-          startLEDAnimation(6, duration);
+          ledAnimations.startAnimation(ANIM_RAINBOW, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for rainbow animation");
         }
@@ -467,7 +176,7 @@ void processSerialCommand() {
       } else if (param.startsWith("pulse-red ")) {
         int duration = param.substring(10).toInt();
         if (duration > 0) {
-          startLEDAnimation(7, duration);
+          ledAnimations.startAnimation(ANIM_PULSE_RED, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for pulse-red animation");
         }
@@ -475,7 +184,7 @@ void processSerialCommand() {
       } else if (param.startsWith("pulse-blue ")) {
         int duration = param.substring(11).toInt();
         if (duration > 0) {
-          startLEDAnimation(8, duration);
+          ledAnimations.startAnimation(ANIM_PULSE_BLUE, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for pulse-blue animation");
         }
@@ -483,7 +192,7 @@ void processSerialCommand() {
       } else if (param.startsWith("strobe ")) {
         int duration = param.substring(7).toInt();
         if (duration > 0) {
-          startLEDAnimation(9, duration);
+          ledAnimations.startAnimation(ANIM_STROBE, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for strobe animation");
         }
@@ -491,7 +200,7 @@ void processSerialCommand() {
       } else if (param.startsWith("fire ")) {
         int duration = param.substring(5).toInt();
         if (duration > 0) {
-          startLEDAnimation(10, duration);
+          ledAnimations.startAnimation(ANIM_FIRE, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for fire animation");
         }
@@ -499,7 +208,7 @@ void processSerialCommand() {
       } else if (param.startsWith("ocean ")) {
         int duration = param.substring(6).toInt();
         if (duration > 0) {
-          startLEDAnimation(11, duration);
+          ledAnimations.startAnimation(ANIM_OCEAN, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for ocean animation");
         }
@@ -507,7 +216,7 @@ void processSerialCommand() {
       } else if (param.startsWith("thinking ")) {
         int duration = param.substring(9).toInt();
         if (duration > 0) {
-          startLEDAnimation(11, duration);
+          ledAnimations.startAnimation(ANIM_THINKING, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for thinking animation");
         }
@@ -524,6 +233,7 @@ void processSerialCommand() {
         Serial.println("  LED:strobe 15 - White strobe");
         Serial.println("  LED:fire 40 - Fire flicker");
         Serial.println("  LED:ocean 50 - Ocean waves");
+        Serial.println("  LED:thinking 20 - Simon thinking");
         Serial.println("  LED:off - Turn off");
       }
       return; // Don't process as display command
