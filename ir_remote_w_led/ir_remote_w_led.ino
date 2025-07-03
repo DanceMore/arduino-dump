@@ -26,6 +26,7 @@
  * - LED:strobe 15           -> White strobe effect for 15 seconds
  * - LED:fire 40             -> Fire effect (red/orange flicker) for 40 seconds
  * - LED:ocean 50            -> Ocean wave effect (blue/cyan) for 50 seconds
+ * - LED:thinking 20         -> Simon-like thinking sequence for 20 seconds
  * - LED:off                 -> Stop all animations and turn off LED
  *
  * Wiring:
@@ -86,7 +87,7 @@ uint8_t displayBrightness = 4;           // Default brightness (0-7)
 bool displayEnabled = true;
 
 // LED Animation variables
-int animationMode = 0;                   // 0=off, 1=ack, 2=red-blue, 3=traffic, 4=matrix, 5=rainbow, 6=pulse-red, 7=pulse-blue, 8=strobe, 9=fire, 10=ocean
++int animationMode = 0;                   // 0=off, 1=ack, 2=red-blue, 3=traffic, 4=matrix, 5=rainbow, 6=pulse-red, 7=pulse-blue, 8=strobe, 9=fire, 10=ocean, 11=thinking
 unsigned long animationEndTime = 0;
 unsigned long lastAnimationUpdate = 0;
 int animationStep = 0;
@@ -249,6 +250,25 @@ void updateLEDAnimation() {
       }
       break;
 
+    case 11: // Thinking - Simon-like sequence
+      {
+        // Cycle through: green, red, yellow, blue with smooth fade
+        int colorIndex = (animationStep / 3) % 4; // Each color lasts 3 steps
+        int fadeStep = animationStep % 3;         // 0=fade in, 1=hold, 2=fade out
+        
+        float intensity = (fadeStep == 0) ? 0.6 : (fadeStep == 1) ? 1.0 : 0.4;
+        uint8_t brightness = (uint8_t)(intensity * 180); // Not full brightness for subtlety
+        
+        switch (colorIndex) {
+          case 0: setColor(0, brightness, 0); break;           // Green
+          case 1: setColor(brightness, 0, 0); break;           // Red  
+          case 2: setColor(brightness, brightness, 0); break;  // Yellow
+          case 3: setColor(0, 0, brightness); break;           // Blue
+        }
+        animationStep++;
+      }
+      break;
+
     default: // Off
       setColor(0, 0, 0);
       break;
@@ -306,6 +326,11 @@ void startLEDAnimation(int animType, int durationSeconds) {
 
     case 10: // Ocean
       animationInterval = 40;
+      animationEndTime = millis() + (durationSeconds * 1000UL);
+      break;
+
+    case 11: // Thinking - Simon sequence
+      animationInterval = 200; // 200ms per step = 600ms per color
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
 
@@ -454,6 +479,14 @@ void processSerialCommand() {
           startLEDAnimation(10, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for ocean animation");
+        }
+
+      } else if (param.startsWith("thinking ")) {
+        int duration = param.substring(9).toInt();
+        if (duration > 0) {
+          startLEDAnimation(11, duration);
+        } else if (DEBUG_MODE) {
+          Serial.println("Invalid duration for thinking animation");
         }
 
       } else if (DEBUG_MODE) {
@@ -648,6 +681,7 @@ void setup() {
     Serial.println("  LED:strobe 15              - White strobe for 15 seconds");
     Serial.println("  LED:fire 40                - Fire flicker for 40 seconds");
     Serial.println("  LED:ocean 50               - Ocean waves for 50 seconds");
+    Serial.println("  LED:thinking 20 - Simon-like thinking");
     Serial.println("  LED:off                    - Turn off LED");
     Serial.println();
     Serial.println("Remove jumper and restart for production mode");
