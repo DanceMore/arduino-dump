@@ -21,9 +21,28 @@ LEDAnimations::LEDAnimations(int redPin, int greenPin, int bluePin) {
   debugMode = false;
 }
 
+// Command table - add new commands here and they'll automatically work
+const LEDCommand LEDAnimations::commands[] = {
+  {"off", ANIM_OFF, false},
+  {"ack", ANIM_ACK, false},
+  {"nack", ANIM_NACK, false},
+  {"red-blue", ANIM_RED_BLUE, true},
+  {"red-green-yellow", ANIM_TRAFFIC, true},
+  {"matrix", ANIM_MATRIX, true},
+  {"rainbow", ANIM_RAINBOW, true},
+  {"pulse-red", ANIM_PULSE_RED, true},
+  {"pulse-blue", ANIM_PULSE_BLUE, true},
+  {"strobe", ANIM_STROBE, true},
+  {"fire", ANIM_FIRE, true},
+  {"ocean", ANIM_OCEAN, true},
+  {"thinking", ANIM_THINKING, true}
+};
+
+const int LEDAnimations::numCommands = sizeof(LEDAnimations::commands) / sizeof(LEDAnimations::commands[0]);
+
 void LEDAnimations::begin(bool debugMode) {
   this->debugMode = debugMode;
-  
+
   // Initialize RGB LED pins
   pinMode(redPin, OUTPUT);
   pinMode(greenPin, OUTPUT);
@@ -327,4 +346,68 @@ void LEDAnimations::off() {
 // Check if currently animating
 bool LEDAnimations::isAnimating() {
   return (animationMode != ANIM_OFF);
+}
+
+
+// Process LED command - replaces the giant if/else block
+bool LEDAnimations::processCommand(const String& command) {
+  if (!command.startsWith("LED:")) {
+    return false; // Not an LED command
+  }
+
+  String param = command.substring(4);
+
+  // Check each command in the table
+  for (int i = 0; i < numCommands; i++) {
+    const LEDCommand& cmd = commands[i];
+
+    if (cmd.requiresDuration) {
+      // Command requires duration parameter
+      String cmdName = String(cmd.name) + " ";
+      if (param.startsWith(cmdName)) {
+        int duration = param.substring(cmdName.length()).toInt();
+        if (duration > 0) {
+          startAnimation(cmd.animationType, duration);
+          return true;
+        } else if (debugMode) {
+          Serial.print("Invalid duration for ");
+          Serial.print(cmd.name);
+          Serial.println(" animation");
+        }
+        return true; // Command was recognized even if invalid
+      }
+    } else {
+      // Simple command without duration
+      if (param == cmd.name) {
+        if (cmd.animationType == ANIM_OFF) {
+          off();
+        } else {
+          startAnimation(cmd.animationType, 0);
+        }
+        return true;
+      }
+    }
+  }
+
+  // Command not found - show help if in debug mode
+  if (debugMode) {
+    printHelp();
+  }
+
+  return true; // We handled the LED: prefix even if command was invalid
+}
+
+// Print help - automatically generated from command table
+void LEDAnimations::printHelp() {
+  Serial.println("LED commands:");
+  for (int i = 0; i < numCommands; i++) {
+    const LEDCommand& cmd = commands[i];
+    Serial.print("  LED:");
+    Serial.print(cmd.name);
+    if (cmd.requiresDuration) {
+      Serial.println(" <duration>");
+    } else {
+      Serial.println();
+    }
+  }
 }

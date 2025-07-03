@@ -24,6 +24,13 @@
 #define ANIM_OCEAN 11
 #define ANIM_THINKING 12
 
+// Command structure for LED animations
+struct LEDCommand {
+  const char* name;
+  int animationType;
+  bool requiresDuration;
+};
+
 class LEDAnimations {
 private:
   // Pin assignments
@@ -38,6 +45,10 @@ private:
   float animationPhase;
   bool ackFlashState;
   bool debugMode;
+  
+  // Command table - automatically expandable
+  static const LEDCommand commands[];
+  static const int numCommands;
   
   // Internal methods
   void hsvToRgb(float h, float s, float v, uint8_t &r, uint8_t &g, uint8_t &b);
@@ -55,6 +66,10 @@ public:
   void flashNack();
   void off();
   bool isAnimating();
+  
+  // Command processing
+  bool processCommand(const String& command);
+  void printHelp();
 };
 
 #endif

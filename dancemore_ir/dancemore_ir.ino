@@ -39,6 +39,7 @@ bool isDebugJumperInstalled() {
 }
 
 // Process serial commands for display and LED control
+// Updated main loop command processing - much cleaner now:
 void processSerialCommand() {
   if (Serial.available()) {
     String command = Serial.readStringUntil('\n');
@@ -49,108 +50,15 @@ void processSerialCommand() {
       return; // Command was handled by display controller
     }
 
-    // Handle LED commands (case sensitive for lowercase commands)
-    if (command.startsWith("LED:")) {
-      String param = command.substring(4);
+    // Try LED controller
+    if (ledAnimations.processCommand(command)) {
+      return; // Command was handled by LED controller
+    }
 
-      if (param == "off") {
-        ledAnimations.off();
-
-      } else if (param == "ack") {
-        ledAnimations.flashAck();
-
-      } else if (param == "nack") {
-        ledAnimations.flashNack();
-
-      } else if (param.startsWith("red-blue ")) {
-        int duration = param.substring(9).toInt();
-        if (duration > 0) {
-          ledAnimations.startAnimation(ANIM_RED_BLUE, duration);
-        } else if (DEBUG_MODE) {
-          Serial.println("Invalid duration for red-blue animation");
-        }
-
-      } else if (param.startsWith("red-green-yellow ")) {
-        int duration = param.substring(17).toInt();
-        if (duration > 0) {
-          ledAnimations.startAnimation(ANIM_TRAFFIC, duration);
-        } else if (DEBUG_MODE) {
-          Serial.println("Invalid duration for red-green-yellow animation");
-        }
-
-      } else if (param.startsWith("matrix ")) {
-        int duration = param.substring(7).toInt();
-        if (duration > 0) {
-          ledAnimations.startAnimation(ANIM_MATRIX, duration);
-        } else if (DEBUG_MODE) {
-          Serial.println("Invalid duration for matrix animation");
-        }
-
-      } else if (param.startsWith("rainbow ")) {
-        int duration = param.substring(8).toInt();
-        if (duration > 0) {
-          ledAnimations.startAnimation(ANIM_RAINBOW, duration);
-        } else if (DEBUG_MODE) {
-          Serial.println("Invalid duration for rainbow animation");
-        }
-
-      } else if (param.startsWith("pulse-red ")) {
-        int duration = param.substring(10).toInt();
-        if (duration > 0) {
-          ledAnimations.startAnimation(ANIM_PULSE_RED, duration);
-        } else if (DEBUG_MODE) {
-          Serial.println("Invalid duration for pulse-red animation");
-        }
-
-      } else if (param.startsWith("pulse-blue ")) {
-        int duration = param.substring(11).toInt();
-        if (duration > 0) {
-          ledAnimations.startAnimation(ANIM_PULSE_BLUE, duration);
-        } else if (DEBUG_MODE) {
-          Serial.println("Invalid duration for pulse-blue animation");
-        }
-
-      } else if (param.startsWith("strobe ")) {
-        int duration = param.substring(7).toInt();
-        if (duration > 0) {
-          ledAnimations.startAnimation(ANIM_STROBE, duration);
-        } else if (DEBUG_MODE) {
-          Serial.println("Invalid duration for strobe animation");
-        }
-
-      } else if (param.startsWith("fire ")) {
-        int duration = param.substring(5).toInt();
-        if (duration > 0) {
-          ledAnimations.startAnimation(ANIM_FIRE, duration);
-        } else if (DEBUG_MODE) {
-          Serial.println("Invalid duration for fire animation");
-        }
-
-      } else if (param.startsWith("ocean ")) {
-        int duration = param.substring(6).toInt();
-        if (duration > 0) {
-          ledAnimations.startAnimation(ANIM_OCEAN, duration);
-        } else if (DEBUG_MODE) {
-          Serial.println("Invalid duration for ocean animation");
-        }
-
-      } else if (param.startsWith("thinking ")) {
-        int duration = param.substring(9).toInt();
-        if (duration > 0) {
-          ledAnimations.startAnimation(ANIM_THINKING, duration);
-        } else if (DEBUG_MODE) {
-          Serial.println("Invalid duration for thinking animation");
-        }
-
-      } else if (DEBUG_MODE) {
-        Serial.println("LED commands:");
-        StringManager::printLEDHelp();
-
-      }
-
-    } else if (DEBUG_MODE) {
+    // Unknown command
+    if (DEBUG_MODE) {
       Serial.println("Commands: DISP:text, DISP:CLR, DISP:ON, DISP:OFF, DISP:BRT:n");
-      Serial.println("LED: LED:ack, LED:matrix 45, LED:rainbow 60, LED:fire 40, LED:off");
+      ledAnimations.printHelp();
     }
   }
 }
