@@ -96,6 +96,19 @@ void LEDAnimations::update() {
       animationStep++;
       break;
 
+    case ANIM_NACK: // Quick negative acknowledgment flash
+      if (animationStep == 0) {
+        setColor(64, 0, 0); // Bright red
+        ackFlashState = true;
+      } else if (animationStep == 1) {
+        setColor(0, 0, 0); // Off
+        ackFlashState = false;
+        animationMode = ANIM_OFF; // End after one flash
+        animationEndTime = 0;
+      }
+      animationStep++;
+      break;
+
     case ANIM_RED_BLUE: // red-blue police style
       if (animationStep % 2 == 0) {
         setColor(255, 0, 0); // Red
@@ -224,6 +237,11 @@ void LEDAnimations::startAnimation(int animType, int durationSeconds) {
       animationEndTime = millis() + 300; // 300ms total
       break;
 
+    case ANIM_NACK: // Quick negative acknowledgment flash
+      animationInterval = 100;
+      animationEndTime = millis() + 300; // 300ms total
+      break;
+
     case ANIM_RED_BLUE: // Red-blue police style - fast
       animationInterval = 150;
       animationEndTime = millis() + (durationSeconds * 1000UL);
@@ -276,7 +294,7 @@ void LEDAnimations::startAnimation(int animType, int durationSeconds) {
       break;
   }
 
-  if (debugMode && animType != ANIM_ACK) { // Don't spam debug for ack flashes
+  if (debugMode && animType != ANIM_ACK && animType != ANIM_NACK) { // Don't spam debug for ack/nack flashes
     Serial.print("LED animation started: mode ");
     Serial.print(animType);
     if (durationSeconds > 0) {
@@ -292,6 +310,11 @@ void LEDAnimations::startAnimation(int animType, int durationSeconds) {
 // Quick acknowledgment flash
 void LEDAnimations::flashAck() {
   startAnimation(ANIM_ACK, 0); // Mode 1, no duration needed
+}
+
+// Quick negative acknowledgment flash
+void LEDAnimations::flashNack() {
+  startAnimation(ANIM_NACK, 0); // Mode 2, no duration needed
 }
 
 // Turn off LED

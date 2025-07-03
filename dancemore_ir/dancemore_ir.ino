@@ -115,6 +115,9 @@ void processSerialCommand() {
       } else if (param == "ack") {
         ledAnimations.flashAck();
 
+      } else if (param == "nack") {
+        ledAnimations.flashNack();
+
       } else if (param.startsWith("red-blue ")) {
         int duration = param.substring(9).toInt();
         if (duration > 0) {
@@ -198,6 +201,7 @@ void processSerialCommand() {
       } else if (DEBUG_MODE) {
         Serial.println("LED commands:");
         Serial.println("  LED:ack - Quick green flash");
+        Serial.println("  LED:nack - Quick red flash");
         Serial.println("  LED:red-blue 30 - Police style");
         Serial.println("  LED:red-green-yellow 60 - Traffic light");
         Serial.println("  LED:matrix 45 - Green Matrix fade");
@@ -266,6 +270,7 @@ void setup() {
     Serial.println();
     Serial.println("Enhanced LED Animation Commands:");
     Serial.println("  LED:ack                    - Quick green acknowledgment flash");
+    Serial.println("  LED:nack                   - Quick red alt acknowledgment flash");
     Serial.println("  LED:red-blue 30            - Police style for 30 seconds");
     Serial.println("  LED:red-green-yellow 60    - Traffic light for 60 seconds");
     Serial.println("  LED:matrix 45              - Green Matrix fade for 45 seconds");
