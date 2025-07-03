@@ -12,16 +12,17 @@
 // Animation mode constants
 #define ANIM_OFF 0
 #define ANIM_ACK 1
-#define ANIM_RED_BLUE 2
-#define ANIM_TRAFFIC 3
-#define ANIM_MATRIX 4
-#define ANIM_RAINBOW 5
-#define ANIM_PULSE_RED 6
-#define ANIM_PULSE_BLUE 7
-#define ANIM_STROBE 8
-#define ANIM_FIRE 9
-#define ANIM_OCEAN 10
-#define ANIM_THINKING 11
+#define ANIM_NACK 2
+#define ANIM_RED_BLUE 3
+#define ANIM_TRAFFIC 4
+#define ANIM_MATRIX 5
+#define ANIM_RAINBOW 6
+#define ANIM_PULSE_RED 7
+#define ANIM_PULSE_BLUE 8
+#define ANIM_STROBE 9
+#define ANIM_FIRE 10
+#define ANIM_OCEAN 11
+#define ANIM_THINKING 12
 
 class LEDAnimations {
 private:
@@ -51,6 +52,7 @@ public:
   void update();
   void startAnimation(int animType, int durationSeconds);
   void flashAck();
+  void flashNack();
   void off();
   bool isAnimating();
 };
