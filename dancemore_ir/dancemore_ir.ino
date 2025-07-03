@@ -50,18 +50,19 @@
  * Debug Jumper:
  * Pin 10 -> GND (jumper wire or actual jumper)
  *
- * LIBRARY REQUIRED:
- * Install "TM1637" library by Avishay Orpaz from Library Manager
+ * LIBRARIES REQUIRED:
+ * - Install "TM1637" library by Avishay Orpaz from Library Manager
+ * - IRremote library
  */
 
 #include <IRremote.h>
-#include <TM1637Display.h>
 #include "LEDAnimations.h"
+#include "DisplayController.h"
 
 // TM1637 Display Configuration
 const int CLK = 5;
 const int DIO = 4;
-TM1637Display display(CLK, DIO);
+DisplayController displayController(CLK, DIO);
 
 // RGB LED Configuration
 const int RED_PIN = 9;
@@ -86,10 +87,6 @@ unsigned long totalSignals = 0;
 unsigned long validSignals = 0;
 unsigned long lastSignalTime = 0;
 
-// Display variables
-uint8_t displayBrightness = 4;           // Default brightness (0-7)
-bool displayEnabled = true;
-
 // Check if debug jumper is installed
 bool isDebugJumperInstalled() {
   pinMode(DEBUG_JUMPER_PIN, INPUT_PULLUP);
@@ -97,39 +94,16 @@ bool isDebugJumperInstalled() {
   return digitalRead(DEBUG_JUMPER_PIN) == LOW; // LOW = jumper to ground
 }
 
-// Check if a string contains only digits
-bool isNumericString(String str) {
-  if (str.length() == 0) return false;
-  for (int i = 0; i < str.length(); i++) {
-    if (!isdigit(str.charAt(i))) {
-      return false;
-    }
-  }
-  return true;
-}
-
-// Display a numeric string exactly as specified (no automatic padding)
-void displayNumericString(String numStr) {
-  uint8_t segments[4] = {0, 0, 0, 0}; // All blank by default
-
-  // Right-align the number (pad with blanks, not zeros)
-  int startPos = 4 - numStr.length();
-  if (startPos < 0) startPos = 0;
-
-  // Leading positions remain blank (0x00)
-  // Fill only the actual digits from the string
-  for (int i = 0; i < numStr.length() && i < 4; i++) {
-    segments[startPos + i] = encodeChar(numStr.charAt(i));
-  }
-
-  display.setSegments(segments);
-}
-
 // Process serial commands for display and LED control
 void processSerialCommand() {
   if (Serial.available()) {
     String command = Serial.readStringUntil('\n');
     command.trim();
+
+    // Try display controller first
+    if (displayController.processCommand(command)) {
+      return; // Command was handled by display controller
+    }
 
     // Handle LED commands (case sensitive for lowercase commands)
     if (command.startsWith("LED:")) {
@@ -236,121 +210,11 @@ void processSerialCommand() {
         Serial.println("  LED:thinking 20 - Simon thinking");
         Serial.println("  LED:off - Turn off");
       }
-      return; // Don't process as display command
-    }
 
-    // Convert to uppercase for display commands
-    command.toUpperCase();
-
-    if (command.startsWith("DISP:")) {
-      String param = command.substring(5);
-
-      if (param == "CLR") {
-        // Clear display
-        display.clear();
-        if (DEBUG_MODE) Serial.println("Display cleared");
-
-      } else if (param == "ON") {
-        // Turn display on
-        displayEnabled = true;
-        display.setBrightness(displayBrightness);
-        if (DEBUG_MODE) Serial.println("Display turned ON");
-
-      } else if (param == "OFF") {
-        // Turn display off
-        displayEnabled = false;
-        display.setBrightness(0);
-        if (DEBUG_MODE) Serial.println("Display turned OFF");
-
-      } else if (param.startsWith("BRT:")) {
-        // Set brightness
-        int brightness = param.substring(4).toInt();
-        if (brightness >= 0 && brightness <= 7) {
-          displayBrightness = brightness;
-          if (displayEnabled) {
-            display.setBrightness(displayBrightness);
-          }
-          if (DEBUG_MODE) {
-            Serial.print("Display brightness set to: ");
-            Serial.println(brightness);
-          }
-        } else if (DEBUG_MODE) {
-          Serial.println("Invalid brightness (0-7)");
-        }
-
-      } else {
-        // Display text or number
-        if (displayEnabled) {
-
-          // Check if it's a numeric string (including those with leading zeros)
-          if (isNumericString(param) && param.length() <= 4) {
-            // Handle as numeric string to preserve leading zeros
-            displayNumericString(param);
-          } else {
-            // Display as text (up to 4 characters)
-            if (param.length() > 4) {
-              param = param.substring(0, 4);
-            }
-
-            // Convert string to display segments
-            uint8_t segments[4] = {0, 0, 0, 0};
-            for (int i = 0; i < param.length() && i < 4; i++) {
-              segments[i] = encodeChar(param.charAt(i));
-            }
-            display.setSegments(segments);
-          }
-
-          if (DEBUG_MODE) {
-            Serial.print("Displayed: ");
-            Serial.println(param);
-          }
-        } else if (DEBUG_MODE) {
-          Serial.println("Display is OFF - use DISP:ON to enable");
-        }
-      }
     } else if (DEBUG_MODE) {
       Serial.println("Commands: DISP:text, DISP:CLR, DISP:ON, DISP:OFF, DISP:BRT:n");
       Serial.println("LED: LED:ack, LED:matrix 45, LED:rainbow 60, LED:fire 40, LED:off");
     }
-  }
-}
-
-// Encode characters for 7-segment display
-uint8_t encodeChar(char c) {
-  switch (c) {
-    case '0': return 0x3F;
-    case '1': return 0x06;
-    case '2': return 0x5B;
-    case '3': return 0x4F;
-    case '4': return 0x66;
-    case '5': return 0x6D;
-    case '6': return 0x7D;
-    case '7': return 0x07;
-    case '8': return 0x7F;
-    case '9': return 0x6F;
-    case 'A': return 0x77;
-    case 'B': return 0x7C;
-    case 'C': return 0x39;
-    case 'D': return 0x5E;
-    case 'E': return 0x79;
-    case 'F': return 0x71;
-    case 'G': return 0x3D;
-    case 'H': return 0x76;
-    case 'I': return 0x06;
-    case 'J': return 0x1E;
-    case 'L': return 0x38;
-    case 'N': return 0x54;
-    case 'O': return 0x3F;
-    case 'P': return 0x73;
-    case 'R': return 0x50;
-    case 'S': return 0x6D;
-    case 'T': return 0x78;
-    case 'U': return 0x3E;
-    case 'Y': return 0x6E;
-    case '-': return 0x40;
-    case '_': return 0x08;
-    case ' ': return 0x00;
-    default:  return 0x00; // Blank for unsupported characters
   }
 }
 
@@ -362,16 +226,6 @@ void setup() {
   pinMode(RED_PIN, OUTPUT);
   pinMode(GREEN_PIN, OUTPUT);
   pinMode(BLUE_PIN, OUTPUT);
-  //setColor(0, 0, 0); // Start with LED off
-
-  // Initialize TM1637 Display
-  display.setBrightness(displayBrightness);
-  display.clear();
-
-  // Show startup pattern
-  display.showNumberDec(8888); // All segments on briefly
-  delay(500);
-  display.clear();
 
   // DIAGNOSTIC: Check jumper status with detailed info
   pinMode(DEBUG_JUMPER_PIN, INPUT_PULLUP);
@@ -380,6 +234,11 @@ void setup() {
   bool jumperDetected = (digitalRead(DEBUG_JUMPER_PIN) == LOW);
   DEBUG_MODE = jumperDetected;
 
+  // Initialize display controller
+  displayController.setDebugMode(DEBUG_MODE);
+  displayController.begin();
+
+  // Initialize LED animations
   ledAnimations.begin(DEBUG_MODE);
 
   // Initialize IR receiver
@@ -425,8 +284,7 @@ void setup() {
     Serial.println("---");
 
     // Show "REDY" on display in debug mode
-    uint8_t readySegments[] = {0x50, 0x79, 0x5E, 0x6E}; // "REDY"
-    display.setSegments(readySegments);
+    displayController.showReady();
 
   } else {
     // Flipper Zero compatible startup
@@ -437,8 +295,7 @@ void setup() {
     Serial.println("Commands: DISP:text, DISP:CLR, LED:ack, LED:matrix 45, LED:rainbow 60, LED:off");
 
     // Show "----" on display in production mode
-    uint8_t dashSegments[] = {0x40, 0x40, 0x40, 0x40}; // "----"
-    display.setSegments(dashSegments);
+    displayController.showDashes();
   }
 
   // Welcome flash
@@ -571,7 +428,8 @@ void loop() {
     if (shouldProcess) {
       // Flash acknowledgment for valid received IR signals (brief, non-blocking)
       if (!isRepeat) {
-        ledAnimations.flashAck();
+        // we let the USB-Serial do all acks / nacks for now...
+        //ledAnimations.flashAck();
       }
 
       if (DEBUG_MODE) {
