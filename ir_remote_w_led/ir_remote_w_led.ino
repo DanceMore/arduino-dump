@@ -19,6 +19,7 @@
  * - LED:red-blue 30         -> Fast police-style red/blue for 30 seconds
  * - LED:red-green-yellow 60 -> Slow traffic light cycle for 60 seconds
  * - LED:ack                 -> Quick green flash for command acknowledgment
+ * - LED:nack                -> Quick red flash for alt acknowledgement
  * - LED:matrix 45           -> Green Matrix-style fade effect for 45 seconds
  * - LED:rainbow 60          -> Rainbow hue shift for 60 seconds
  * - LED:pulse-red 30        -> Red pulsing effect for 30 seconds
@@ -159,7 +160,20 @@ void updateLEDAnimation() {
       animationStep++;
       break;
 
-    case 2: // red-blue police style
+    case 2: // Quick negative acknowledgment flash (red)
+      if (animationStep == 0) {
+        setColor(128, 0, 0); // Bright red
+        ackFlashState = true;
+      } else if (animationStep == 1) {
+        setColor(0, 0, 0); // Off
+        ackFlashState = false;
+        animationMode = 0; // End after one flash
+        animationEndTime = 0;
+      }
+      animationStep++;
+      break;
+
+    case 3: // red-blue police style
       if (animationStep % 2 == 0) {
         setColor(255, 0, 0); // Red
       } else {
@@ -168,7 +182,7 @@ void updateLEDAnimation() {
       animationStep++;
       break;
 
-    case 3: // red-green-yellow traffic light
+    case 4: // red-green-yellow traffic light
       switch (animationStep % 3) {
         case 0: setColor(255, 0, 0); break;   // Red
         case 1: setColor(0, 255, 0); break;   // Green
@@ -177,7 +191,7 @@ void updateLEDAnimation() {
       animationStep++;
       break;
 
-    case 4: // Matrix effect - green fade
+    case 5: // Matrix effect - green fade
       {
         float intensity = (sin(animationPhase) + 1.0) / 2.0; // 0.0 to 1.0
         uint8_t green = (uint8_t)(intensity * 255);
@@ -187,7 +201,7 @@ void updateLEDAnimation() {
       }
       break;
 
-    case 5: // Rainbow hue shift
+    case 6: // Rainbow hue shift
       {
         uint8_t r, g, b;
         float hue = fmod(animationPhase * 10, 360); // Cycle through hues
@@ -198,7 +212,7 @@ void updateLEDAnimation() {
       }
       break;
 
-    case 6: // Pulse red
+    case 7: // Pulse red
       {
         float intensity = (sin(animationPhase) + 1.0) / 2.0; // 0.0 to 1.0
         uint8_t red = (uint8_t)(intensity * 255);
@@ -208,7 +222,7 @@ void updateLEDAnimation() {
       }
       break;
 
-    case 7: // Pulse blue
+    case 8: // Pulse blue
       {
         float intensity = (sin(animationPhase) + 1.0) / 2.0; // 0.0 to 1.0
         uint8_t blue = (uint8_t)(intensity * 255);
@@ -218,7 +232,7 @@ void updateLEDAnimation() {
       }
       break;
 
-    case 8: // Strobe white
+    case 9: // Strobe white
       if (animationStep % 2 == 0) {
         setColor(255, 255, 255); // White
       } else {
@@ -227,7 +241,7 @@ void updateLEDAnimation() {
       animationStep++;
       break;
 
-    case 9: // Fire effect
+    case 10: // Fire effect
       {
         // Random flicker between red and orange
         uint8_t red = 200 + random(56);     // 200-255
@@ -237,7 +251,7 @@ void updateLEDAnimation() {
       }
       break;
 
-    case 10: // Ocean wave effect
+    case 11: // Ocean wave effect
       {
         float wave1 = (sin(animationPhase) + 1.0) / 2.0;
         float wave2 = (sin(animationPhase * 1.3 + 1.0) + 1.0) / 2.0;
@@ -263,48 +277,49 @@ void startLEDAnimation(int animType, int durationSeconds) {
   lastAnimationUpdate = 0;
 
   switch (animType) {
-    case 1: // Quick acknowledgment flash
+    case 1: // Quick acknowledgment flash (green)
+    case 2: // Quick negative acknowledgment flash (red)
       animationInterval = 100;
       animationEndTime = millis() + 300; // 300ms total
       break;
 
-    case 2: // Red-blue police style - fast
+    case 3: // Red-blue police style - fast
       animationInterval = 150;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
 
-    case 3: // Traffic light - slow
+    case 4: // Traffic light - slow
       animationInterval = 800;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
 
-    case 4: // Matrix effect
+    case 5: // Matrix effect
       animationInterval = 50;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
 
-    case 5: // Rainbow
+    case 6: // Rainbow
       animationInterval = 30;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
 
-    case 6: // Pulse red
-    case 7: // Pulse blue
+    case 7: // Pulse red
+    case 8: // Pulse blue
       animationInterval = 30;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
 
-    case 8: // Strobe
+    case 9: // Strobe
       animationInterval = 100;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
 
-    case 9: // Fire
+    case 10: // Fire
       animationInterval = 80;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
 
-    case 10: // Ocean
+    case 11: // Ocean
       animationInterval = 40;
       animationEndTime = millis() + (durationSeconds * 1000UL);
       break;
@@ -331,6 +346,11 @@ void startLEDAnimation(int animType, int durationSeconds) {
 // Quick acknowledgment flash
 void flashAck() {
   startLEDAnimation(1, 0); // Mode 1, no duration needed
+}
+
+// Quick negative acknowledgment flash
+void flashNack() {
+  startLEDAnimation(2, 0); // Mode 2, no duration needed
 }
 
 // Check if debug jumper is installed
@@ -384,10 +404,13 @@ void processSerialCommand() {
       } else if (param == "ack") {
         flashAck();
 
+      } else if (param == "nack") {
+        flashNack();
+
       } else if (param.startsWith("red-blue ")) {
         int duration = param.substring(9).toInt();
         if (duration > 0) {
-          startLEDAnimation(2, duration);
+          startLEDAnimation(3, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for red-blue animation");
         }
@@ -395,7 +418,7 @@ void processSerialCommand() {
       } else if (param.startsWith("red-green-yellow ")) {
         int duration = param.substring(17).toInt();
         if (duration > 0) {
-          startLEDAnimation(3, duration);
+          startLEDAnimation(4, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for red-green-yellow animation");
         }
@@ -403,7 +426,7 @@ void processSerialCommand() {
       } else if (param.startsWith("matrix ")) {
         int duration = param.substring(7).toInt();
         if (duration > 0) {
-          startLEDAnimation(4, duration);
+          startLEDAnimation(5, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for matrix animation");
         }
@@ -411,7 +434,7 @@ void processSerialCommand() {
       } else if (param.startsWith("rainbow ")) {
         int duration = param.substring(8).toInt();
         if (duration > 0) {
-          startLEDAnimation(5, duration);
+          startLEDAnimation(6, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for rainbow animation");
         }
@@ -419,7 +442,7 @@ void processSerialCommand() {
       } else if (param.startsWith("pulse-red ")) {
         int duration = param.substring(10).toInt();
         if (duration > 0) {
-          startLEDAnimation(6, duration);
+          startLEDAnimation(7, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for pulse-red animation");
         }
@@ -427,7 +450,7 @@ void processSerialCommand() {
       } else if (param.startsWith("pulse-blue ")) {
         int duration = param.substring(11).toInt();
         if (duration > 0) {
-          startLEDAnimation(7, duration);
+          startLEDAnimation(8, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for pulse-blue animation");
         }
@@ -435,7 +458,7 @@ void processSerialCommand() {
       } else if (param.startsWith("strobe ")) {
         int duration = param.substring(7).toInt();
         if (duration > 0) {
-          startLEDAnimation(8, duration);
+          startLEDAnimation(9, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for strobe animation");
         }
@@ -443,7 +466,7 @@ void processSerialCommand() {
       } else if (param.startsWith("fire ")) {
         int duration = param.substring(5).toInt();
         if (duration > 0) {
-          startLEDAnimation(9, duration);
+          startLEDAnimation(10, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for fire animation");
         }
@@ -451,7 +474,7 @@ void processSerialCommand() {
       } else if (param.startsWith("ocean ")) {
         int duration = param.substring(6).toInt();
         if (duration > 0) {
-          startLEDAnimation(10, duration);
+          startLEDAnimation(11, duration);
         } else if (DEBUG_MODE) {
           Serial.println("Invalid duration for ocean animation");
         }
