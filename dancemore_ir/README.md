@@ -52,3 +52,7 @@ Pin 10 -> GND (jumper wire or actual jumper)
 LIBRARIES REQUIRED:
 - Install "TM1637" library by Avishay Orpaz from Library Manager
 - IRremote library
+
+
+* All user-facing or system messages must be added to StringConstants.h in PROGMEM and accessed via StringManager::readProgmemString().
+* * we care more about future authors making mistakes, forgetting F(), and expanding our Memory Footprint than the cost of a small buffer to PSTR()

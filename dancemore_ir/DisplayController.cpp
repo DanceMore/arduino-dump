@@ -164,39 +164,6 @@ void DisplayController::displayNumericString(String numStr) {
 }
 
 uint8_t DisplayController::encodeChar(char c) {
-    switch (c) {
-        case '0': return 0x3F;
-        case '1': return 0x06;
-        case '2': return 0x5B;
-        case '3': return 0x4F;
-        case '4': return 0x66;
-        case '5': return 0x6D;
-        case '6': return 0x7D;
-        case '7': return 0x07;
-        case '8': return 0x7F;
-        case '9': return 0x6F;
-        case 'A': return 0x77;
-        case 'B': return 0x7C;
-        case 'C': return 0x39;
-        case 'D': return 0x5E;
-        case 'E': return 0x79;
-        case 'F': return 0x71;
-        case 'G': return 0x3D;
-        case 'H': return 0x76;
-        case 'I': return 0x06;
-        case 'J': return 0x1E;
-        case 'L': return 0x38;
-        case 'N': return 0x54;
-        case 'O': return 0x3F;
-        case 'P': return 0x73;
-        case 'R': return 0x50;
-        case 'S': return 0x6D;
-        case 'T': return 0x78;
-        case 'U': return 0x3E;
-        case 'Y': return 0x6E;
-        case '-': return 0x40;
-        case '_': return 0x08;
-        case ' ': return 0x00;
-        default:  return 0x00; // Blank for unsupported characters
-    }
+    if (c < 32 || c > 90) return 0x00;
+    return pgm_read_byte(&CHAR_LOOKUP[c - 32]);
 }

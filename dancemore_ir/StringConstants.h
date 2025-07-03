@@ -132,8 +132,8 @@ const CommandHelp LED_COMMANDS[] PROGMEM = {
     {HELP_LED_OFF, nullptr, true}
 };
 
-const int DISPLAY_COMMANDS_COUNT = sizeof(DISPLAY_COMMANDS) / sizeof(CommandHelp);
-const int LED_COMMANDS_COUNT = sizeof(LED_COMMANDS) / sizeof(CommandHelp);
+constexpr int DISPLAY_COMMANDS_COUNT = sizeof(DISPLAY_COMMANDS) / sizeof(CommandHelp);
+constexpr int LED_COMMANDS_COUNT = sizeof(LED_COMMANDS) / sizeof(CommandHelp);
 
 // ================== ANIMATION CONFIGURATION ==================
 
@@ -161,26 +161,26 @@ const AnimationConfig ANIMATIONS[] PROGMEM = {
     {ANIM_THINKING, 200, ANIM_NAME_THINKING, 8}
 };
 
-const int ANIMATIONS_COUNT = sizeof(ANIMATIONS) / sizeof(AnimationConfig);
+constexpr int ANIMATIONS_COUNT = sizeof(ANIMATIONS) / sizeof(AnimationConfig);
 
 // ================== UTILITY FUNCTIONS ==================
 
 class StringManager {
 private:
     static char buffer[64]; // Shared buffer for PROGMEM string operations
-    
+
 public:
     // Read a PROGMEM string into the buffer
     static char* readProgmemString(const char* progmemStr) {
         strcpy_P(buffer, progmemStr);
         return buffer;
     }
-    
+
     // Compare a RAM string with a PROGMEM string
     static bool compareWithProgmem(const char* ramStr, const char* progmemStr) {
         return strcmp_P(ramStr, progmemStr) == 0;
     }
-    
+
     // Get animation config by name
     static const AnimationConfig* getAnimationConfig(const char* name) {
         for (int i = 0; i < ANIMATIONS_COUNT; i++) {
