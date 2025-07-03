@@ -53,7 +53,6 @@ private:
   // Internal methods
   void hsvToRgb(float h, float s, float v, uint8_t &r, uint8_t &g, uint8_t &b);
   void setColor(uint8_t red, uint8_t green, uint8_t blue);
-  void getRainbowColor(uint8_t index, uint8_t &r, uint8_t &g, uint8_t &b);
 
   void updateAck();
   void updateNack();
