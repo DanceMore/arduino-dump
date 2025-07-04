@@ -5,9 +5,6 @@
 
 #include "LEDAnimations.h"
 
-// Define the size of the sine lookup table
-#define SINE_LOOKUP_SIZE 64
-
 // Define the static member variables declared in the header
 // These must match the declarations in LEDAnimations.h
 
@@ -30,23 +27,47 @@ const LEDCommand LEDAnimations::commands[] PROGMEM = {
 
 const int LEDAnimations::numCommands = sizeof(LEDAnimations::commands) / sizeof(LEDAnimations::commands[0]);
 
-// Rainbow color lookup table - 60 entries covering full spectrum
-// This replaces the floating-point HSV calculation entirely
+// Improved Rainbow color lookup table - 64 entries for smooth looping
+// Power of 2 size for efficient bit-masking: index & 63
 const uint8_t LEDAnimations::rainbowTable[][3] PROGMEM = {
-  {255,0,0}, {255,17,0}, {255,34,0}, {255,51,0}, {255,68,0}, {255,85,0}, {255,102,0}, {255,119,0}, {255,136,0}, {255,153,0},
-  {255,170,0}, {255,187,0}, {255,204,0}, {255,221,0}, {255,238,0}, {255,255,0}, {238,255,0}, {221,255,0}, {204,255,0}, {187,255,0},
-  {170,255,0}, {153,255,0}, {136,255,0}, {119,255,0}, {102,255,0}, {85,255,0}, {68,255,0}, {51,255,0}, {34,255,0}, {17,255,0},
-  {0,255,0}, {0,255,17}, {0,255,34}, {0,255,51}, {0,255,68}, {0,255,85}, {0,255,102}, {0,255,119}, {0,255,136}, {0,255,153},
-  {0,255,170}, {0,255,187}, {0,255,204}, {0,255,221}, {0,255,238}, {0,255,255}, {0,238,255}, {0,221,255}, {0,204,255}, {0,187,255},
-  {0,170,255}, {0,153,255}, {0,136,255}, {0,119,255}, {0,102,255}, {0,85,255}, {0,68,255}, {0,51,255}, {0,34,255}, {0,17,255}
+  // Red to Orange to Yellow (0-10)
+  {255,0,0}, {255,16,0}, {255,32,0}, {255,48,0}, {255,64,0}, {255,80,0}, {255,96,0}, {255,112,0}, {255,128,0}, {255,144,0}, {255,160,0},
+  // Yellow to Yellow-Green (11-15)
+  {255,176,0}, {255,192,0}, {255,208,0}, {255,224,0}, {255,240,0},
+  // Yellow-Green to Green (16-21)
+  {255,255,0}, {224,255,0}, {192,255,0}, {160,255,0}, {128,255,0}, {96,255,0},
+  // Green to Green-Cyan (22-26)
+  {64,255,0}, {32,255,0}, {16,255,0}, {0,255,0}, {0,255,32},
+  // Green-Cyan to Cyan (27-31)
+  {0,255,64}, {0,255,96}, {0,255,128}, {0,255,160}, {0,255,192},
+  // Cyan to Cyan-Blue (32-36)
+  {0,255,224}, {0,255,255}, {0,224,255}, {0,192,255}, {0,160,255},
+  // Cyan-Blue to Blue (37-42)
+  {0,128,255}, {0,96,255}, {0,64,255}, {0,32,255}, {0,16,255}, {0,0,255},
+  // Blue to Blue-Purple (43-47)
+  {16,0,255}, {32,0,255}, {48,0,255}, {64,0,255}, {80,0,255},
+  // Blue-Purple to Purple (48-52)
+  {96,0,255}, {112,0,255}, {128,0,255}, {144,0,255}, {160,0,255},
+  // Purple to Purple-Red (53-57)
+  {176,0,255}, {192,0,255}, {208,0,255}, {224,0,255}, {240,0,255},
+  // Purple-Red to Red (58-63)
+  {255,0,255}, {255,0,224}, {255,0,192}, {255,0,160}, {255,0,128}, {255,0,96},
+  {255,0,64}, {255,0,32}
 };
 
-const uint8_t LEDAnimations::RAINBOW_TABLE_SIZE = sizeof(LEDAnimations::rainbowTable) / sizeof(LEDAnimations::rainbowTable[0]);
+const uint8_t LEDAnimations::RAINBOW_TABLE_SIZE = 64;
 
-// Precomputed sine lookup table (0-255 range for (sin(angle) + 1.0) / 2.0 * 255)
-// This table replaces floating-point sin() calculations.
-const uint8_t LEDAnimations::sineLookup[SINE_LOOKUP_SIZE] PROGMEM = {
-  128, 140, 152, 164, 176, 187, 198, 208, 218, 227, 235, 242, 248, 252, 255, 255, 255, 252, 248, 242, 235, 227, 218, 208, 198, 187, 176, 164, 152, 140, 128, 116, 104, 92, 80, 69, 58, 48, 38, 29, 21, 14, 8, 4, 1, 0, 0, 1, 4, 8, 14, 21, 29, 38, 48, 58, 69, 80, 92, 104, 116, 128
+#define SINE_LOOKUP_SIZE 64
+
+// Mathematically precise sine lookup table - 64 entries (0 to 2π)
+// Values represent (sin(angle) + 1.0) / 2.0 * 255
+// Each entry is sin(i * 2π / 64) mapped to 0-255 range
+const uint8_t LEDAnimations::sineLookup[64] PROGMEM = {
+  128, 140, 152, 164, 176, 187, 198, 208, 218, 227, 235, 242, 248, 252, 255,
+  255, 252, 248, 242, 235, 227, 218, 208, 198, 187, 176, 164, 152, 140, 128,
+  115, 103, 91, 79, 68, 57, 47, 37, 28, 20, 13, 7, 3, 0, 0,
+  3, 7, 13, 20, 28, 37, 47, 57, 68, 79, 91, 103, 115, 128, 140,
+  152, 164, 176, 187
 };
 
 // Animation timing lookup table in PROGMEM
@@ -62,7 +83,7 @@ const AnimationTiming timingTable[] PROGMEM = {
   {ANIM_RED_BLUE, 150, 0},
   {ANIM_TRAFFIC, 800, 0},
   {ANIM_MATRIX, 50, 0},
-  {ANIM_RAINBOW, 30, 0},
+  {ANIM_RAINBOW, 50, 0},
   {ANIM_PULSE_RED, 30, 0},
   {ANIM_PULSE_BLUE, 30, 0},
   {ANIM_STROBE, 100, 0},
